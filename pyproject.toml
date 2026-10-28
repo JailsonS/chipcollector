@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chipcollector"
+version = "0.1.0"
+description = "Plataforma web multiusuário para coleta de amostras (chips) de referência para treinamento de modelos de IA em sensoriamento remoto — classificação e segmentação."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Jailson Soares de Souza Filho Alves" }]
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "sqlmodel>=0.0.16",
+  "python-multipart>=0.0.9",
+  "itsdangerous>=2.1",
+  "numpy>=1.26",
+  "shapely>=2.0",
+  "pyproj>=3.6",
+  "geopandas>=0.14",
+  "pyogrio>=0.7",
+  "rasterio>=1.3",
+  "pillow>=10.0",
+  "pystac-client>=0.7",
+  "planetary-computer>=1.0",
+  "httpx>=0.26",
+]
+
+[project.optional-dependencies]
+gee = ["earthengine-api>=0.1.390"]
+drive = ["google-api-python-client>=2.100", "google-auth>=2.25", "google-auth-oauthlib>=1.2"]
+postgres = ["psycopg[binary]>=3.1"]
+dev = ["pytest>=8", "httpx>=0.26"]
+all = ["chipcollector[gee,drive,postgres]"]
+
+[project.scripts]
+chipcollector = "chipcollector.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["chipcollector*"]
+
+[tool.setuptools.package-data]
+chipcollector = ["static/*", "static/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
