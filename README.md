@@ -178,7 +178,7 @@ API documentada automaticamente em `http://localhost:8000/docs`.
 
 Bibliotecas: FastAPI, SQLModel/SQLAlchemy, rasterio/GDAL, GeoPandas, Shapely, pyproj,
 pystac‑client, planetary‑computer, earthengine‑api, google‑api‑python‑client, Pillow, NumPy,
-Leaflet e Leaflet‑Geoman (free). Todas open source.
+Leaflet, Leaflet‑Geoman (free) e a fonte Manrope (OFL). Todas open source.
 
 ## Testes
 

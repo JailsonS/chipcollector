@@ -87,9 +87,18 @@ window.addEventListener("hashchange", route);
 function renderLogin() {
   crumbs([]);
   view().innerHTML = `
+  <div class="welcome">
+  <section class="lead">
+    <h1>Amostras de referência para modelos de IA, coletadas em equipe.</h1>
+    <p>Gere chips de imagem a partir das suas camadas de referência, rotule ou desenhe o alvo direto no navegador e exporte um conjunto pronto para treinamento.</p>
+    <div class="steps">
+      <div><span class="step-no">01 / Carregar</span><h3>Referências e imagens</h3><p>Camadas vetoriais ou matriciais, Sentinel, Landsat, NICFI ou mosaicos próprios.</p></div>
+      <div><span class="step-no">02 / Anotar</span><h3>Classificação ou segmentação</h3><p>Cada pessoa recebe os próprios chips, e cada rótulo guarda quem o fez.</p></div>
+      <div><span class="step-no">03 / Exportar</span><h3>Pronto para treinar</h3><p>GeoTIFF, máscaras e COCO, no seu computador ou no Google Drive.</p></div>
+    </div>
+  </section>
   <div class="login card stack">
-    <h1>Entrar</h1>
-    <p class="muted small">Plataforma de coleta de amostras de referência para treinamento de modelos de IA.</p>
+    <h2 id="loginTitle">Entrar</h2>
     <div class="field"><label>Usuário</label><input id="lu" autocomplete="username"></div>
     <div class="field"><label>Senha</label><input id="lp" type="password" autocomplete="current-password"></div>
     <div id="signupExtra" class="hidden">
@@ -98,6 +107,7 @@ function renderLogin() {
     </div>
     <div class="row"><button class="primary" id="loginBtn">Entrar</button>
     ${S.config.allow_signup ? '<button class="ghost" id="toSignup">Criar conta</button>' : ""}</div>
+  </div>
   </div>`;
   let signup = false;
   const go = async () => {
@@ -111,6 +121,7 @@ function renderLogin() {
     signup = !signup;
     $("#signupExtra").classList.toggle("hidden", !signup);
     $("#loginBtn").textContent = signup ? "Criar conta" : "Entrar";
+    $("#loginTitle").textContent = signup ? "Criar conta" : "Entrar";
     ts.textContent = signup ? "Já tenho conta" : "Criar conta";
   };
 }
@@ -120,7 +131,7 @@ async function renderProjects() {
   crumbs([["Projetos"]]);
   const list = await api("/api/projects");
   view().innerHTML = `
-    <div class="row" style="margin-bottom:1rem"><h1 style="margin:0">Projetos</h1><div class="spacer"></div>
+    <div class="page-head"><div><h1 style="margin:0">Projetos</h1><p>Escolha um projeto para anotar ou acompanhar.</p></div><div class="spacer"></div>
       ${S.me.is_admin ? '<button class="primary" id="newProj">+ Novo projeto</button>' : ""}</div>
     <div id="newProjForm" class="card hidden" style="margin-bottom:1rem"></div>
     <div class="projects">${list.map(projectCard).join("") || '<p class="muted">Nenhum projeto ainda.</p>'}</div>`;
@@ -151,8 +162,9 @@ function projectCard(p) {
     <div class="muted small">${esc(p.target || p.description || "")}</div>
     <div class="row small">${(p.classes || []).map((c) => `<span><span class="swatch" style="background:${esc(c.color)}"></span>${esc(c.name)}</span>`).join("")}</div>
     <div class="progress"><div style="width:${pct}%"></div></div>
-    <div class="row small muted"><span>${st.chips_complete || 0}/${st.chips || 0} chips completos</span><div class="spacer"></div>
-      <span>${st.annotations || 0} anotações</span><span>${p.chip_size_px}px · ${p.resolution_m} m</span></div>
+    <div class="row small muted"><span>${st.chips_complete || 0} de ${st.chips || 0} chips completos</span><div class="spacer"></div>
+      <span>${st.annotations || 0} anotações</span><span>${p.chip_size_px} px, ${p.resolution_m} m</span></div>
+    <span class="open">Abrir projeto →</span>
   </div>`;
 }
 
@@ -667,8 +679,8 @@ async function renderSetup() {
   S.rasters = rasters;
   tabview().innerHTML = `
   <div class="stack">
-    <div class="card"><h2>1. Parâmetros do projeto</h2><div id="pform"></div></div>
-    <div class="card"><h2>2. Bases de imagem (sensores e períodos)</h2>
+    <div class="card"><h2><span class="step-no">01 /</span>Parâmetros do projeto</h2><div id="pform"></div></div>
+    <div class="card"><h2><span class="step-no">02 /</span>Bases de imagem (sensores e períodos)</h2>
       <p class="muted small">As imagens de cada chip são buscadas sob demanda e reamostradas para a grade do chip
       (${p.chip_size_px}px × ${p.resolution_m} m). Planetary Computer e Earth Search são gratuitos e não exigem conta;
       o Google Earth Engine é gratuito para ONGs/pesquisa (exige projeto Cloud registrado — ${S.config.gee_project ? "configurado ✓" : "<b>não configurado no servidor</b>"}).</p>
@@ -676,7 +688,7 @@ async function renderSetup() {
       <div class="row"><button id="addSrc">+ base de imagem</button><button class="primary" id="saveSrc">Salvar bases</button></div>
     </div>
     <div class="grid2">
-      <div class="card"><h2>3. Camadas de referência</h2>
+      <div class="card"><h2><span class="step-no">03 /</span>Camadas de referência</h2>
         <p class="muted small">Vetor (GPKG, GeoJSON, SHP zipado, KML, FGB, Parquet) com um campo de classe para estratificar,
         ou raster categórico (GeoTIFF, ex.: MapBiomas, PRODES).</p>
         <div class="field"><label>Arquivo(s)</label><input id="lyFiles" type="file" multiple></div>
@@ -699,7 +711,7 @@ async function renderSetup() {
           <td><button class="ghost danger small" data-dr="${r.id}">✕</button></td></tr>`).join("")}</tbody></table>
       </div>
     </div>
-    <div class="card"><h2>4. Gerar chips (amostragem estratificada)</h2>
+    <div class="card"><h2><span class="step-no">04 /</span>Gerar chips (amostragem estratificada)</h2>
       <div class="inline-fields">
         <div class="field"><label>Camada</label><select id="gLayer">${layers.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join("")}</select></div>
         <div class="field"><label>Chips por estrato</label><input id="gN" type="number" value="50" min="1"></div>
