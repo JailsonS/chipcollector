@@ -12,13 +12,13 @@ Para instalação e detalhes técnicos, veja o [README](../README.md).
 
 | Jornada | Quem | Histórias |
 |---|---|---|
-| 🚪 **Primeiros passos** | todos | [1. Entrar pela primeira vez](#1-entrar-pela-primeira-vez) · [2. Trocar idioma e senha](#2-trocar-idioma-e-senha) |
-| 👥 **Administração** | administrador | [3. Montar a equipe](#3-montar-a-equipe) |
-| 🛠️ **Configurando um projeto** | administrador | [4. Criar o projeto](#4-criar-o-projeto) · [5. Escolher as bases de imagem](#5-escolher-as-bases-de-imagem) · [6. Carregar as camadas de referência](#6-carregar-as-camadas-de-referência) · [7. Gerar os chips](#7-gerar-os-chips) · [8. Criar um chip com um clique](#8-criar-um-chip-com-um-clique) |
-| ✍️ **Coletando dados** | anotadores | [9. Trabalhar a fila de chips](#9-trabalhar-a-fila-de-chips) · [10. Rotular chips (classificação)](#10-rotular-chips-classificação) · [11. Desenhar o alvo (segmentação)](#11-desenhar-o-alvo-segmentação) · [12. Corrigir uma anotação](#12-corrigir-uma-anotação) |
-| 🔍 **Validando dados** | administrador | [13. Anotação dupla e às cegas](#13-anotação-dupla-e-às-cegas) · [14. Revisar o trabalho de outra pessoa](#14-revisar-o-trabalho-de-outra-pessoa) · [15. Acompanhar o progresso](#15-acompanhar-o-progresso) |
-| 📦 **Exportando** | todos | [16. Gerar o pacote de treinamento](#16-gerar-o-pacote-de-treinamento) · [17. Enviar ao Google Drive](#17-enviar-ao-google-drive) |
-| 🧰 **Quando algo dá errado** | todos | [Problemas comuns](#problemas-comuns) |
+| **Primeiros passos** | todos | [1. Entrar pela primeira vez](#1-entrar-pela-primeira-vez) · [2. Trocar idioma e senha](#2-trocar-idioma-e-senha) |
+| **Administração** | administrador | [3. Montar a equipe](#3-montar-a-equipe) |
+| **Configurando um projeto** | administrador | [4. Criar o projeto](#4-criar-o-projeto) · [5. Escolher as bases de imagem](#5-escolher-as-bases-de-imagem) · [6. Carregar as camadas de referência](#6-carregar-as-camadas-de-referência) · [7. Gerar os chips](#7-gerar-os-chips) · [8. Criar um chip com um clique](#8-criar-um-chip-com-um-clique) |
+| **Coletando dados** | anotadores | [9. Trabalhar a fila de chips](#9-trabalhar-a-fila-de-chips) · [10. Rotular chips (classificação)](#10-rotular-chips-classificação) · [11. Desenhar o alvo (segmentação)](#11-desenhar-o-alvo-segmentação) · [12. Corrigir uma anotação](#12-corrigir-uma-anotação) |
+| **Validando dados** | administrador | [13. Anotação dupla e às cegas](#13-anotação-dupla-e-às-cegas) · [14. Revisar o trabalho de outra pessoa](#14-revisar-o-trabalho-de-outra-pessoa) · [15. Acompanhar o progresso](#15-acompanhar-o-progresso) |
+| **Exportando** | todos | [16. Gerar o pacote de treinamento](#16-gerar-o-pacote-de-treinamento) · [17. Enviar ao Google Drive](#17-enviar-ao-google-drive) |
+| **Quando algo dá errado** | todos | [Problemas comuns](#problemas-comuns) |
 
 ### O ciclo completo
 
@@ -35,7 +35,7 @@ flowchart LR
 
 ---
 
-## 🚪 Primeiros passos
+## Primeiros passos
 
 ### 1. Entrar pela primeira vez
 
@@ -81,7 +81,7 @@ flowchart LR
 
 ---
 
-## 👥 Administração
+## Administração
 
 ### 3. Montar a equipe
 
@@ -102,12 +102,12 @@ Na lista ao lado você pode, a qualquer momento:
 
 | O que cada papel pode fazer | Anotador | Administrador |
 |---|:---:|:---:|
-| Anotar chips, ver mapa e progresso | ✅ | ✅ |
-| Criar chip com um clique no mapa | ✅ | ✅ |
-| Exportar amostras | ✅ | ✅ |
-| Criar e configurar projetos, enviar camadas, gerar chips | | ✅ |
-| Ver anotações de outras pessoas no mesmo chip | | ✅ |
-| Gerenciar usuários | | ✅ |
+| Anotar chips, ver mapa e progresso | sim | sim |
+| Criar chip com um clique no mapa | sim | sim |
+| Exportar amostras | sim | sim |
+| Criar e configurar projetos, enviar camadas, gerar chips | | sim |
+| Ver anotações de outras pessoas no mesmo chip | | sim |
+| Gerenciar usuários | | sim |
 
 > [!TIP]
 > Por padrão, qualquer pessoa pode criar a própria conta na tela inicial. Para que só
@@ -119,7 +119,7 @@ Na lista ao lado você pode, a qualquer momento:
 
 ---
 
-## 🛠️ Configurando um projeto
+## Configurando um projeto
 
 ### 4. Criar o projeto
 
@@ -275,11 +275,11 @@ No quadro **Rasters locais**, ao lado, você envia mosaicos próprios para usar 
 
 ---
 
-## ✍️ Coletando dados
+## Coletando dados
 
 ### 9. Trabalhar a fila de chips
 
-> **Quem:** anotador · **Onde:** aba **Anotar** · **Tempo:** o dia todo 🙂
+> **Quem:** anotador · **Onde:** aba **Anotar** · **Tempo:** ao longo do trabalho
 >
 > *"Quero receber um chip de cada vez, sem esbarrar no trabalho dos colegas."*
 
@@ -339,13 +339,13 @@ Toda anotação termina com um destes três botões:
 
 1. Escolha a **classe** no painel (ou tecla **1**, **2**…).
 2. Desenhe:
-   - **✎ Polígono** (tecla **P**): clique em cada vértice e clique no primeiro ponto para fechar;
-   - **▭ Retângulo:** clique num canto e depois no canto oposto;
-   - para acelerar, use **⇩ Usar referência**, que copia os polígonos da camada de referência já com a classe. Depois só ajuste.
+   - **Polígono** (tecla **P**): clique em cada vértice e clique no primeiro ponto para fechar;
+   - **Retângulo:** clique num canto e depois no canto oposto;
+   - para acelerar, use **Usar referência**, que copia os polígonos da camada de referência já com a classe. Depois só ajuste.
 3. Ajuste:
-   - **⬚ Editar** (tecla **E**): arraste os vértices;
-   - **✂ Recortar:** desenhe sobre um polígono para tirar um pedaço (ex.: uma ilha de floresta);
-   - **🗑 Apagar** (tecla **Del**): depois clique no polígono que quer remover;
+   - **Editar** (tecla **E**): arraste os vértices;
+   - **Recortar:** desenhe sobre um polígono para tirar um pedaço (ex.: uma ilha de floresta);
+   - **Apagar** (tecla **Del**): depois clique no polígono que quer remover;
    - clique num polígono para trocá-lo para a classe selecionada.
 4. Aperte **Esc** para sair da ferramenta e **Enter** para salvar.
 
@@ -371,7 +371,7 @@ Toda anotação termina com um destes três botões:
 
 ---
 
-## 🔍 Validando dados
+## Validando dados
 
 ### 13. Anotação dupla e às cegas
 
@@ -437,7 +437,7 @@ O que ajuda a validar:
 
 ---
 
-## 📦 Exportando
+## Exportando
 
 ### 16. Gerar o pacote de treinamento
 
@@ -486,9 +486,7 @@ O que vem no pacote:
 
 ---
 
-<a id="problemas-comuns"></a>
-
-## 🧰 Problemas comuns
+## Problemas comuns
 
 <details>
 <summary><b>Não consigo digitar no login</b></summary>
