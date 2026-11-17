@@ -119,14 +119,14 @@ function renderLogin() {
     $("#lpShow").textContent = show ? "Ocultar" : "Mostrar";
     $("#lpShow").setAttribute("aria-label", show ? "Ocultar senha" : "Mostrar senha");
   };
-  $("#lu").onkeydown = (e) => e.key === "Enter" && $("#lp").focus();
+  $("#lu").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#lp").focus(); });
   const go = async () => {
     const body = { username: $("#lu").value, password: $("#lp").value, full_name: $("#ln").value, email: $("#le").value };
     if (!body.username || !body.password) return toast("Preencha usuário e senha.", true);
     try { S.me = await api(signup ? "/api/auth/signup" : "/api/auth/login", { method: "POST", body }); S.config = null; route(); } catch (e) { fail(e); }
   };
   $("#loginBtn").onclick = go;
-  $("#lp").onkeydown = (e) => e.key === "Enter" && go();
+  $("#lp").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
   const setMode = (on) => {
     signup = on;
     $("#signupExtra").classList.toggle("hidden", !signup);
@@ -404,7 +404,7 @@ function bindAnnotateControls() {
   $("#srcSel").onchange = () => { A.rgb = null; $("#stMin").value = $("#stMax").value = ""; loadImage(); };
   $("#stMin").onchange = $("#stMax").onchange = () => loadImage(false);
   $("#cmpSel").onchange = () => { $("#cmpOp").classList.toggle("hidden", !$("#cmpSel").value); loadCompare(); };
-  $("#cmpOp").oninput = () => A.cmpLayer && A.cmpLayer.setOpacity(Number($("#cmpOp").value));
+  $("#cmpOp").oninput = () => { if (A.cmpLayer) A.cmpLayer.setOpacity(Number($("#cmpOp").value)); };
   $("#stratumSel").onchange = () => openNext();
   $("#saveBtn").onclick = () => save("done");
   $("#uncBtn").onclick = () => save("uncertain");
