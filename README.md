@@ -11,6 +11,8 @@ comuns são suportadas: **classificação** (rótulo por chip) e **segmentação
 |---|---|
 | ![](docs/anotacao_segmentacao.png) | ![](docs/anotacao_classificacao.png) |
 
+> 📖 **Passo a passo de cada funcionalidade:** veja o [Guia de uso](docs/GUIA.md) — configurar um projeto, coletar, validar e exportar.
+
 ## Funcionalidades × requisitos da proposta
 
 | Requisito | Como foi atendido |

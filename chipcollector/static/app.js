@@ -270,14 +270,16 @@ async function renderAnnotate(chipId) {
   <div class="workspace">
     <div class="chipmap-wrap">
       <div id="chipmap" class="chip-crs"></div>
-      <div class="toolstrip">
-        ${seg ? `<button data-t="poly" title="Desenhar polígono (P)">✎ Polígono</button>
+      ${seg ? `<div class="toolstrip">
+        <button data-t="poly" title="Desenhar polígono (P)">✎ Polígono</button>
         <button data-t="rect" title="Retângulo">▭ Retângulo</button>
         <button data-t="edit" title="Editar vértices (E)">⬚ Editar</button>
         <button data-t="cut" title="Recortar polígonos">✂ Recortar</button>
         <button data-t="del" title="Apagar polígono (Del)">🗑 Apagar</button>
         <button data-t="useref" title="Copiar polígonos de referência para edição">⇩ Usar referência</button>
-        <button data-t="clear" title="Remover todos os polígonos">Limpar</button>` : ""}
+        <button data-t="clear" title="Remover todos os polígonos">Limpar</button>
+      </div>` : ""}
+      <div class="toolstrip view">
         <button data-t="ref" class="active" title="Mostrar/ocultar referência (R)">Referência</button>
         <button data-t="others" class="${S.me.is_admin ? "" : "hidden"}" title="Anotações de outros usuários">Outros</button>
         <button data-t="fit" title="Enquadrar">⤢</button>
@@ -511,7 +513,7 @@ async function openChip(id) {
   }).addTo(A.refLayer);
   (c.other_annotations || []).forEach((o) => L.geoJSON(o.features, {
     pmIgnore: true, interactive: false, coordsToLatLng: (xy) => toLL(xy[0], xy[1]),
-    style: (f) => ({ color: classById(f.properties.class_id)?.color || "#fff", weight: 1, dashArray: "1,4", fill: false }),
+    style: (f) => ({ color: classById(f.properties.class_id)?.color || "#fff", weight: 2.5, dashArray: "2,5", lineCap: "round", fill: false }),
   }).addTo(A.otherLayer));
   // anotação existente
   A.labels = new Set((c.my_annotation?.labels || []).map(Number));
@@ -919,7 +921,7 @@ async function renderTeam() {
   const st = p.stats;
   const rows = Object.entries(st.by_user).sort((a, b) => sum(b[1]) - sum(a[1]));
   tabview().innerHTML = `
-  <div class="grid2" style="margin-bottom:1rem">
+  <div class="stats">
     <div class="card"><div class="muted small">Chips</div><div class="stat">${st.chips}</div></div>
     <div class="card"><div class="muted small">Chips completos</div><div class="stat">${st.chips_complete}</div></div>
     <div class="card"><div class="muted small">Anotações</div><div class="stat">${st.annotations}</div></div>

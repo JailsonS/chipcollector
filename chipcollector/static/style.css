@@ -211,6 +211,11 @@ h2.danger { color: var(--danger); }
 .langbox button { border: 0; background: transparent; padding: .3rem .65rem; font-size: .78rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
 .langbox button:hover { color: var(--ink); border: 0; }
 .langbox button.on { background: var(--ink); color: var(--panel); }
-.toolstrip { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-.toolstrip::-webkit-scrollbar { display: none; }
+.toolstrip { flex-wrap: wrap; border-radius: 18px; }
 .toolstrip button { flex-shrink: 0; padding: .38rem .6rem; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.2rem; margin-bottom: 1.2rem; }
+.toolstrip:not(.view) { max-width: calc(100% - 15rem); }
+.toolstrip:empty { display: none; }
+.toolstrip.view { left: auto; right: .8rem; flex-wrap: nowrap; }
+#jobs a { overflow-wrap: anywhere; }
+#jobs td:first-child { white-space: nowrap; width: 1%; }
