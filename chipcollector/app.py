@@ -240,10 +240,11 @@ def create_app() -> FastAPI:
 
     # ------------------------------------------------------------------ config/auth
     @app.get("/api/config")
-    def config():
+    def config(session: Session = Depends(get_session)):
         from .drive import oauth_enabled, service_account_enabled
         s = get_settings()
-        return {"version": __version__, "allow_signup": s.allow_signup, "drive_oauth": oauth_enabled(),
+        return {"version": __version__, "allow_signup": s.allow_signup,
+                "has_users": session.exec(select(User.id)).first() is not None, "drive_oauth": oauth_enabled(),
                 "drive_service_account": service_account_enabled(), "gee_project": bool(s.gee_project),
                 "catalog": catalog()}
 

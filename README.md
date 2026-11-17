@@ -38,7 +38,12 @@ chipcollector demo --seed
 chipcollector serve          # abra http://localhost:8000
 ```
 
-Sem `--seed`, abra o navegador e **crie a primeira conta — ela vira administradora**.
+**Primeiro acesso:**
+- com `chipcollector demo --seed`, entre com usuário `admin` e senha `admin123`;
+- sem `--seed`, a tela abre em *Criar conta*: a primeira conta criada vira administradora.
+
+A senha aparece oculta ao digitar; use o botão *Mostrar* no campo para conferir.
+Para criar ou redefinir um usuário pelo terminal: `chipcollector create-user nome --password "senha" --admin`.
 
 ### Docker
 

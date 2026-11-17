@@ -202,3 +202,6 @@ h2.danger { color: var(--danger); }
 #rgbBox { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .project-card .row:first-child { flex-wrap: nowrap; align-items: flex-start; }
 .project-card .row:first-child .pill { flex-shrink: 0; margin-top: .2rem; }
+.pwd { position: relative; }
+.pwd input { padding-right: 5.5rem; }
+.pwd button { position: absolute; right: .3rem; top: 50%; transform: translateY(-50%); padding: .35rem .7rem; font-size: .8rem; }

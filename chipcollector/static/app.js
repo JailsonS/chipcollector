@@ -99,8 +99,11 @@ function renderLogin() {
   </section>
   <div class="login card stack">
     <h2 id="loginTitle">Entrar</h2>
+    <p id="loginHint" class="muted small" style="margin-top:-.3rem"></p>
     <div class="field"><label>Usuário</label><input id="lu" autocomplete="username"></div>
-    <div class="field"><label>Senha</label><input id="lp" type="password" autocomplete="current-password"></div>
+    <div class="field"><label for="lp">Senha</label>
+      <div class="pwd"><input id="lp" type="password" autocomplete="current-password">
+      <button type="button" class="ghost small" id="lpShow" aria-label="Mostrar senha">Mostrar</button></div></div>
     <div id="signupExtra" class="hidden">
       <div class="field"><label>Nome completo</label><input id="ln"></div>
       <div class="field"><label>E-mail</label><input id="le" type="email"></div>
@@ -110,20 +113,36 @@ function renderLogin() {
   </div>
   </div>`;
   let signup = false;
+  $("#lpShow").onclick = () => {
+    const i = $("#lp"), show = i.type === "password";
+    i.type = show ? "text" : "password";
+    $("#lpShow").textContent = show ? "Ocultar" : "Mostrar";
+    $("#lpShow").setAttribute("aria-label", show ? "Ocultar senha" : "Mostrar senha");
+  };
+  $("#lu").onkeydown = (e) => e.key === "Enter" && $("#lp").focus();
   const go = async () => {
     const body = { username: $("#lu").value, password: $("#lp").value, full_name: $("#ln").value, email: $("#le").value };
-    try { S.me = await api(signup ? "/api/auth/signup" : "/api/auth/login", { method: "POST", body }); route(); } catch (e) { fail(e); }
+    if (!body.username || !body.password) return toast("Preencha usuário e senha.", true);
+    try { S.me = await api(signup ? "/api/auth/signup" : "/api/auth/login", { method: "POST", body }); S.config = null; route(); } catch (e) { fail(e); }
   };
   $("#loginBtn").onclick = go;
   $("#lp").onkeydown = (e) => e.key === "Enter" && go();
-  const ts = $("#toSignup");
-  if (ts) ts.onclick = () => {
-    signup = !signup;
+  const setMode = (on) => {
+    signup = on;
     $("#signupExtra").classList.toggle("hidden", !signup);
     $("#loginBtn").textContent = signup ? "Criar conta" : "Entrar";
     $("#loginTitle").textContent = signup ? "Criar conta" : "Entrar";
-    ts.textContent = signup ? "Já tenho conta" : "Criar conta";
+    $("#lp").autocomplete = signup ? "new-password" : "current-password";
+    const ts = $("#toSignup");
+    if (ts) ts.textContent = signup ? "Já tenho conta" : "Criar conta";
+    $("#loginHint").textContent = !S.config.has_users
+      ? "Ainda não há usuários. A primeira conta criada será a administradora."
+      : signup ? "Senha com pelo menos 6 caracteres." : "";
   };
+  const ts = $("#toSignup");
+  if (ts) ts.onclick = () => setMode(!signup);
+  setMode(!S.config.has_users && S.config.allow_signup !== false);
+  $("#lu").focus();;
 }
 
 /* =========================================================== projetos */
