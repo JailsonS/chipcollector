@@ -71,6 +71,13 @@ docker compose exec app chipcollector create-user maria --password "senha123"
 5. **Anotar**: cada usuário recebe o próximo chip livre da fila (filtrável por estrato).
 6. **Exportar**: escolha bases, status, divisão treino/val/teste e destino.
 
+### Idioma
+
+A interface está em **português e inglês**: use o seletor **PT | EN** no canto superior direito.
+A escolha fica salva no navegador; no primeiro acesso, vale o idioma do navegador. As traduções
+ficam em `chipcollector/static/i18n.js` (um dicionário por idioma); para incluir outro idioma,
+adicione um dicionário e um botão em `LANGS`.
+
 ### Atalhos de teclado (aba Anotar)
 
 | Tecla | Ação |

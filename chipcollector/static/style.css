@@ -205,3 +205,12 @@ h2.danger { color: var(--danger); }
 .pwd { position: relative; }
 .pwd input { padding-right: 5.5rem; }
 .pwd button { position: absolute; right: .3rem; top: 50%; transform: translateY(-50%); padding: .35rem .7rem; font-size: .8rem; }
+
+/* seletor de idioma */
+.langbox { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+.langbox button { border: 0; background: transparent; padding: .3rem .65rem; font-size: .78rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.langbox button:hover { color: var(--ink); border: 0; }
+.langbox button.on { background: var(--ink); color: var(--panel); }
+.toolstrip { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.toolstrip::-webkit-scrollbar { display: none; }
+.toolstrip button { flex-shrink: 0; padding: .38rem .6rem; }

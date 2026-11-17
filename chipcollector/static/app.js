@@ -14,13 +14,13 @@ async function api(path, opts = {}) {
     o.headers["Content-Type"] = "application/json";
   }
   const r = await fetch(path, o);
-  if (r.status === 401 && !path.startsWith("/api/auth")) { S.me = null; route(); throw new Error("Sessão expirada."); }
+  if (r.status === 401 && !path.startsWith("/api/auth")) { S.me = null; route(); throw new Error(t("Sessão expirada.")); }
   const ct = r.headers.get("content-type") || "";
   const data = ct.includes("json") ? await r.json() : await r.text();
   if (!r.ok) {
     let msg = data && data.detail ? data.detail : data;
     if (Array.isArray(msg)) msg = msg.map((d) => `${(d.loc || []).slice(1).join(".")}: ${d.msg}`).join("; ");
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    throw new Error(typeof msg === "string" ? tr(msg) : JSON.stringify(msg));
   }
   return data;
 }
@@ -34,7 +34,8 @@ function toast(msg, err = false) {
 const fail = (e) => toast(e.message || String(e), true);
 
 function crumbs(items) {
-  $("#crumbs").innerHTML = items.map(([t, h]) => (h ? `<a href="${h}">${esc(t)}</a>` : `<span>${esc(t)}</span>`)).join("<span>/</span>");
+  // o último item pode ser o nome de um projeto (dado do usuário): não traduzir
+  $("#crumbs").innerHTML = items.map(([x, h], i) => (h ? `<a href="${h}">${esc(x)}</a>` : `<span ${i && i === items.length - 1 ? 'translate="no"' : ""}>${esc(x)}</span>`)).join("<span>/</span>");
 }
 
 function renderUserbox() {
@@ -47,7 +48,7 @@ function renderUserbox() {
     <button class="small" id="logoutBtn">Sair</button>`;
   $("#logoutBtn").onclick = async () => { await api("/api/auth/logout", { method: "POST" }); S.me = null; location.hash = "#/"; route(); };
   $("#pwdBtn").onclick = async () => {
-    const p = prompt("Nova senha (mín. 6 caracteres):");
+    const p = prompt(t("Nova senha (mín. 6 caracteres):"));
     if (!p) return;
     try { await api(`/api/users/${S.me.id}`, { method: "PATCH", body: { password: p } }); toast("Senha alterada."); } catch (e) { fail(e); }
   };
@@ -82,6 +83,7 @@ async function route() {
   } catch (e) { fail(e); }
 }
 window.addEventListener("hashchange", route);
+function onLangChange() { route(); }
 
 /* =========================================================== login */
 function renderLogin() {
@@ -123,7 +125,7 @@ function renderLogin() {
   const go = async () => {
     const body = { username: $("#lu").value, password: $("#lp").value, full_name: $("#ln").value, email: $("#le").value };
     if (!body.username || !body.password) return toast("Preencha usuário e senha.", true);
-    try { S.me = await api(signup ? "/api/auth/signup" : "/api/auth/login", { method: "POST", body }); S.config = null; route(); } catch (e) { fail(e); }
+    try { S.me = await api(signup ? "/api/auth/signup" : "/api/auth/login", { method: "POST", body }); $("#toast").hidden = true; S.config = null; route(); } catch (e) { fail(e); }
   };
   $("#loginBtn").onclick = go;
   $("#lp").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
@@ -160,7 +162,7 @@ async function renderProjects() {
     const f = $("#newProjForm");
     f.classList.toggle("hidden");
     f.innerHTML = projectForm({ name: "", description: "", target: "", annotation_type: "classification", multiclass: false,
-      chip_size_px: 256, resolution_m: 10, annotators_per_chip: 1, classes: [{ id: 1, name: "alvo", color: "#e63946" }] }, true);
+      chip_size_px: 256, resolution_m: 10, annotators_per_chip: 1, classes: [{ id: 1, name: t("alvo"), color: "#e63946" }] }, true);
     bindClassEditor(f);
     $("#saveProj", f).onclick = async () => {
       try {
@@ -176,13 +178,13 @@ function projectCard(p) {
   const st = p.stats || {};
   const pct = st.chips ? Math.round((100 * st.chips_complete) / st.chips) : 0;
   return `<div class="card project-card stack" data-id="${p.id}">
-    <div class="row"><h2 style="margin:0">${esc(p.name)}</h2><div class="spacer"></div>
+    <div class="row"><h2 style="margin:0" translate="no">${esc(p.name)}</h2><div class="spacer"></div>
       <span class="pill">${p.annotation_type === "segmentation" ? "segmentação" : "classificação"}</span></div>
-    <div class="muted small">${esc(p.target || p.description || "")}</div>
-    <div class="row small">${(p.classes || []).map((c) => `<span><span class="swatch" style="background:${esc(c.color)}"></span>${esc(c.name)}</span>`).join("")}</div>
+    <div class="muted small" translate="no">${esc(p.target || p.description || "")}</div>
+    <div class="row small" translate="no">${(p.classes || []).map((c) => `<span><span class="swatch" style="background:${esc(c.color)}"></span>${esc(c.name)}</span>`).join("")}</div>
     <div class="progress"><div style="width:${pct}%"></div></div>
-    <div class="row small muted"><span>${st.chips_complete || 0} de ${st.chips || 0} chips completos</span><div class="spacer"></div>
-      <span>${st.annotations || 0} anotações</span><span>${p.chip_size_px} px, ${p.resolution_m} m</span></div>
+    <div class="row small muted"><span>${t("{a} de {b} chips completos", { a: st.chips_complete || 0, b: st.chips || 0 })}</span><div class="spacer"></div>
+      <span>${t("{n} anotações", { n: st.annotations || 0 })}</span><span>${p.chip_size_px} px, ${p.resolution_m} m</span></div>
     <span class="open">Abrir projeto →</span>
   </div>`;
 }
@@ -260,7 +262,7 @@ async function renderAnnotate(chipId) {
   const p = S.project;
   const seg = p.annotation_type === "segmentation";
   if (!p.image_sources.length) {
-    tabview().innerHTML = `<div class="card">Este projeto ainda não tem bases de imagem. ${S.me.is_admin ? `<a href="#/p/${p.id}/setup">Configurar</a>` : "Peça a um administrador para configurar."}</div>`;
+    tabview().innerHTML = `<div class="card">${t("Este projeto ainda não tem bases de imagem.")} ${S.me.is_admin ? `<a href="#/p/${p.id}/setup">${t("Configurar")}</a>` : t("Peça a um administrador para configurar.")}</div>`;
     return;
   }
   const strata = Object.keys(p.stats.by_stratum || {});
@@ -343,7 +345,7 @@ async function renderAnnotate(chipId) {
 function setupGeoman() {
   const m = A.map;
   m.pm.setGlobalOptions({ snappable: true, snapDistance: 12, allowSelfIntersection: false, continueDrawing: true });
-  m.pm.setLang("pt_br");
+  m.pm.setLang(LANG === "pt" ? "pt_br" : "en");
   m.on("pm:create", (e) => {
     tagDrawn(e.layer, A.classId);
   });
@@ -362,7 +364,7 @@ function tagDrawn(layer, classId) {
     if (layer.feature.properties.class_id !== Number(A.classId)) {
       layer.feature.properties.class_id = Number(A.classId);
       styleDrawn(layer);
-      toast(`Polígono → ${classById(A.classId)?.name}`);
+      toast(t("Polígono → {name}", { name: classById(A.classId)?.name }));
     }
   });
 }
@@ -398,7 +400,7 @@ function bindAnnotateControls() {
     if (t === "others") { b.classList.toggle("active"); A.map.hasLayer(A.otherLayer) ? A.map.removeLayer(A.otherLayer) : A.otherLayer.addTo(A.map); return; }
     if (t === "fit") { fitChip(); return; }
     if (t === "useref") { useReference(); return; }
-    if (t === "clear") { if (confirm("Remover todos os polígonos deste chip?")) drawnLayers().forEach((l) => A.map.removeLayer(l)); return; }
+    if (t === "clear") { if (confirm(t("Remover todos os polígonos deste chip?"))) drawnLayers().forEach((l) => A.map.removeLayer(l)); return; }
     setTool(t);
   }));
   $("#srcSel").onchange = () => { A.rgb = null; $("#stMin").value = $("#stMax").value = ""; loadImage(); };
@@ -422,7 +424,7 @@ function renderClassButtons() {
     html += `<div class="small muted" style="margin-top:.3rem">Sem polígonos = ausência do alvo. Clique num polígono para trocar sua classe para a selecionada.</div>`;
   } else if (p.classes.length === 1) {
     const c = p.classes[0];
-    html = `<button data-c="${c.id}" class="${A.labelChosen && A.labels.has(Number(c.id)) ? "active" : ""}"><span class="swatch" style="background:${esc(c.color)}"></span>Presente: ${esc(c.name)}<kbd class="k">1</kbd></button>
+    html = `<button data-c="${c.id}" class="${A.labelChosen && A.labels.has(Number(c.id)) ? "active" : ""}"><span class="swatch" style="background:${esc(c.color)}"></span>${esc(t("Presente: {name}", { name: c.name }))}<kbd class="k">1</kbd></button>
       <button data-c="0" class="${A.labelChosen && !A.labels.size ? "active" : ""}">Ausente<kbd class="k">0</kbd></button>`;
   } else {
     html = p.classes.map((c, i) => `<button data-c="${c.id}" class="${A.labels.has(Number(c.id)) ? "active" : ""}">
@@ -490,14 +492,14 @@ async function openNext() {
 async function openChip(id) {
   const p = S.project, seg = p.annotation_type === "segmentation";
   const c = await api(`/api/chips/${id}`);
-  if (c.project_id !== p.id) throw new Error("Chip de outro projeto.");
+  if (c.project_id !== p.id) throw new Error(t("Chip de outro projeto."));
   A.chip = c; A.chipId = c.id;
   const S0 = c.size_px;
   A.bounds = L.latLngBounds([[-S0, 0], [0, S0]]);
   $("#chipTitle").textContent = `Chip #${c.id}`;
-  $("#chipInfo").innerHTML = `estrato <b>${esc(c.stratum)}</b> · ${c.lat.toFixed(5)}, ${c.lon.toFixed(5)} · EPSG:${c.epsg}<br>
-    ${c.size_px}×${c.size_px} px · ${c.resolution_m} m · ${c.n_annotations}/${c.annotators_per_chip} anotações
-    ${c.my_annotation ? `<br><span class="pill">já anotado por você (${esc(c.my_annotation.status)})</span>` : ""}`;
+  $("#chipInfo").innerHTML = `${t("estrato {s}", { s: `<b translate="no">${esc(c.stratum)}</b>` })} · ${c.lat.toFixed(5)}, ${c.lon.toFixed(5)} · EPSG:${c.epsg}<br>
+    ${c.size_px}×${c.size_px} px · ${c.resolution_m} m · ${t("{a}/{b} anotações", { a: c.n_annotations, b: c.annotators_per_chip })}
+    ${c.my_annotation ? `<br><span class="pill">${esc(t("já anotado por você ({s})", { s: t(statusLabel(c.my_annotation.status)) }))}</span>` : ""}`;
   // limpa camadas
   drawnLayers().forEach((l) => A.map.removeLayer(l));
   A.refLayer.clearLayers(); A.otherLayer.clearLayers();
@@ -548,8 +550,8 @@ function loadOverlay(url) {
     const img = new Image();
     img.onload = () => resolve(url);
     img.onerror = async () => {
-      try { const r = await fetch(url); const j = await r.json(); reject(new Error(j.detail || "Erro ao obter imagem")); }
-      catch (_) { reject(new Error("Erro ao obter imagem")); }
+      try { const r = await fetch(url); const j = await r.json(); reject(new Error(tr(j.detail) || t("Erro ao obter imagem"))); }
+      catch (_) { reject(new Error(t("Erro ao obter imagem"))); }
     };
     img.src = url;
   });
@@ -570,8 +572,8 @@ async function loadImage(refreshBands = true) {
       const st = info.source.stretch;
       if (st && $("#stMin").value === "" && $("#stMax").value === "") { $("#stMin").placeholder = st[0]; $("#stMax").placeholder = st[1]; }
       const m = info.meta || {};
-      $("#imgMeta").innerHTML = [m.dates?.length ? `cenas: ${m.dates.slice(0, 6).join(", ")}${m.dates.length > 6 ? "…" : ""}` : "",
-        m.valid_fraction !== undefined ? `pixels válidos: ${(100 * m.valid_fraction).toFixed(0)}%` : "",
+      $("#imgMeta").innerHTML = [m.dates?.length ? t("cenas: {d}", { d: m.dates.slice(0, 6).join(", ") + (m.dates.length > 6 ? "…" : "") }) : "",
+        m.valid_fraction !== undefined ? t("pixels válidos: {p}%", { p: (100 * m.valid_fraction).toFixed(0) }) : "",
         `<a href="/api/chips/${chipId}/image.tif?source=${encodeURIComponent(srcId)}">GeoTIFF</a>`].filter(Boolean).join(" · ");
       $("#rgbBox").innerHTML = ["R", "G", "B"].map((ch, i) => `<div><label>${ch}</label><select data-i="${i}">
         ${A.bands.map((b) => `<option ${A.rgb[i] === b ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></div>`).join("");
@@ -603,7 +605,7 @@ async function loadCompare() {
 
 function useReference() {
   const feats = (A.chip.reference?.features || []).filter((f) => /Polygon/.test(f.geometry.type));
-  if (!feats.length) return toast("Sem polígonos de referência neste chip.");
+  if (!feats.length) return toast(t("Sem polígonos de referência neste chip."));
   let n = 0;
   L.geoJSON({ type: "FeatureCollection", features: feats }, { coordsToLatLng: (xy) => toLL(xy[0], xy[1]) }).eachLayer((l) => {
     const cid = l.feature.properties.class_id ?? A.classId;
@@ -611,7 +613,7 @@ function useReference() {
     const polys = l instanceof L.Polygon && Array.isArray(lls[0]) && Array.isArray(lls[0][0]) ? lls : [lls];
     polys.forEach((ll) => { tagDrawn(L.polygon(ll).addTo(A.map), cid); n++; });
   });
-  toast(`${n} polígono(s) copiados — ajuste os vértices com "Editar".`);
+  toast(t("{n} polígono(s) copiados — ajuste os vértices com \"Editar\".", { n }));
 }
 
 async function save(status) {
@@ -635,7 +637,7 @@ async function loadHistory() {
   try {
     const rows = await api(`/api/projects/${S.project.id}/annotations?mine=true&limit=12`);
     $("#history").innerHTML = rows.length ? rows.map((r) => `<div class="row"><a href="#/p/${S.project.id}/annotate/${r.chip_id}">#${r.chip_id}</a>
-      <span class="muted">${esc(r.status)}</span><span>${esc((r.labels || []).map((i) => classById(i)?.name || i).join(", ") || "ausente")}</span></div>`).join("")
+      <span class="muted">${esc(t(statusLabel(r.status)))}</span><span translate="no">${esc((r.labels || []).map((i) => classById(i)?.name || i).join(", ") || t("ausente"))}</span></div>`).join("")
       : '<span class="muted">nenhuma ainda</span>';
   } catch (_) {}
 }
@@ -673,7 +675,7 @@ async function renderMap() {
   const pts = L.featureGroup(chips.map((c) => L.circleMarker([c.lat, c.lon], {
     radius: 5, weight: c.mine ? 2.5 : 1, color: c.mine ? "#e63946" : "#222",
     fillColor: c.complete ? "#2d6a4f" : c.n_annotations ? "#f4a261" : "#8d99ae", fillOpacity: 0.9 })
-    .bindTooltip(`#${c.id} · ${c.stratum} · ${c.n_annotations} anot.`)
+    .bindTooltip(t("#{id} · {s} · {n} anot.", { id: c.id, s: c.stratum, n: c.n_annotations }))
     .on("click", () => (location.hash = `#/p/${p.id}/annotate/${c.id}`)))).addTo(map);
   overlays["Chips"] = pts; all.addLayer(pts);
   L.control.layers({ OpenStreetMap: osm, "Sentinel-2 cloudless (EOX)": eox }, overlays).addTo(map);
@@ -684,7 +686,7 @@ async function renderMap() {
     if (!manual) return;
     try {
       const r = await api(`/api/projects/${p.id}/chips/manual`, { method: "POST", body: { lon: e.latlng.lng, lat: e.latlng.lat, layer_id: Number($("#manLayer").value) || null } });
-      toast(`Chip #${r.id} criado.`);
+      toast(t("Chip #{id} criado.", { id: r.id }));
       location.hash = `#/p/${p.id}/annotate/${r.id}`;
     } catch (err) { fail(err); }
   });
@@ -700,9 +702,8 @@ async function renderSetup() {
   <div class="stack">
     <div class="card"><h2><span class="step-no">01 /</span>Parâmetros do projeto</h2><div id="pform"></div></div>
     <div class="card"><h2><span class="step-no">02 /</span>Bases de imagem (sensores e períodos)</h2>
-      <p class="muted small">As imagens de cada chip são buscadas sob demanda e reamostradas para a grade do chip
-      (${p.chip_size_px}px × ${p.resolution_m} m). Planetary Computer e Earth Search são gratuitos e não exigem conta;
-      o Google Earth Engine é gratuito para ONGs/pesquisa (exige projeto Cloud registrado — ${S.config.gee_project ? "configurado ✓" : "<b>não configurado no servidor</b>"}).</p>
+      <p class="muted small">${t("As imagens de cada chip são buscadas sob demanda e reamostradas para a grade do chip ({size}px × {res} m). Planetary Computer e Earth Search são gratuitos e não exigem conta; o Google Earth Engine é gratuito para ONGs/pesquisa (exige projeto Cloud registrado — {gee}).",
+        { size: p.chip_size_px, res: p.resolution_m, gee: S.config.gee_project ? t("configurado ✓") : `<b>${t("não configurado no servidor")}</b>` })}</p>
       <div id="sources"></div>
       <div class="row"><button id="addSrc">+ base de imagem</button><button class="primary" id="saveSrc">Salvar bases</button></div>
     </div>
@@ -716,7 +717,7 @@ async function renderSetup() {
           <div class="field"><label>Campo de classe (vetor)</label><input id="lyField" placeholder="ex.: classe"></div></div>
         <button class="primary" id="lyUp">Enviar camada</button>
         <table style="margin-top:.8rem"><thead><tr><th>Camada</th><th>Estratos</th><th></th></tr></thead><tbody>
-        ${layers.map((l) => `<tr><td><b>${esc(l.name)}</b><br><span class="muted small">${esc(l.theme)} · ${l.kind} · ${l.n_features} feições ${l.class_field ? "· campo " + esc(l.class_field) : ""}</span></td>
+        ${layers.map((l) => `<tr><td><b>${esc(l.name)}</b><br><span class="muted small">${esc(t("{theme} · {kind} · {n} feições", { theme: l.theme, kind: l.kind, n: l.n_features }))} ${l.class_field ? esc(t("· campo {f}", { f: l.class_field })) : ""}</span></td>
           <td class="small">${Object.entries(l.strata).slice(0, 12).map(([k, v]) => `${esc(k)}: ${v}`).join("<br>")}</td>
           <td><button class="ghost danger small" data-dl="${l.id}">✕</button></td></tr>`).join("")}</tbody></table>
       </div>
@@ -726,7 +727,7 @@ async function renderSetup() {
         <div class="field"><label>Nome</label><input id="rsName"></div>
         <button class="primary" id="rsUp">Enviar raster</button>
         <table style="margin-top:.8rem"><tbody>${rasters.map((r) => `<tr><td>#${r.id} <b>${esc(r.name)}</b><br>
-          <span class="muted small">${r.count} bandas (${esc(r.band_names.join(", "))}) · ${esc(r.crs)}</span></td>
+          <span class="muted small">${esc(t("{n} bandas ({names}) · {crs}", { n: r.count, names: r.band_names.join(", "), crs: r.crs }))}</span></td>
           <td><button class="ghost danger small" data-dr="${r.id}">✕</button></td></tr>`).join("")}</tbody></table>
       </div>
     </div>
@@ -735,13 +736,13 @@ async function renderSetup() {
         <div class="field"><label>Camada</label><select id="gLayer">${layers.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join("")}</select></div>
         <div class="field"><label>Chips por estrato</label><input id="gN" type="number" value="50" min="1"></div>
         <div class="field"><label>Chips de fundo (fora das feições)</label><input id="gBg" type="number" value="0" min="0"></div>
-        <div class="field"><label>Espaçamento mín. (px)</label><input id="gSp" type="number" placeholder="${p.chip_size_px} (sem sobreposição)"></div>
+        <div class="field"><label>Espaçamento mín. (px)</label><input id="gSp" type="number" placeholder="${esc(t("{n} (sem sobreposição)", { n: p.chip_size_px }))}"></div>
         <div class="field"><label>Posição</label><select id="gPl"><option value="random">aleatória dentro da feição</option><option value="centroid">centro da feição</option></select></div>
         <div class="field"><label>Semente</label><input id="gSeed" type="number" value="42"></div>
       </div>
       <div id="gStrata"></div>
       <div class="row"><button class="primary" id="gGo">Gerar chips</button>
-        <span class="muted small">Chips atuais: ${p.stats.chips}</span><div class="spacer"></div>
+        <span class="muted small">${t("Chips atuais: {n}", { n: p.stats.chips })}</span><div class="spacer"></div>
         <button class="danger" id="gDel">Apagar chips sem anotação</button></div>
     </div>
     <div class="card"><h2 class="danger">Zona de perigo</h2><button class="danger" id="delProj">Excluir projeto</button></div>
@@ -781,10 +782,10 @@ async function renderSetup() {
     [...files].forEach((f) => fd.append("files", f));
     fd.append("name", $("#lyName").value); fd.append("theme", $("#lyTheme").value); fd.append("class_field", $("#lyField").value);
     $("#lyUp").disabled = true;
-    try { const r = await api(`/api/projects/${p.id}/layers`, { method: "POST", body: fd }); toast(`Camada enviada: ${r.n_features} feições. Campos: ${(r.fields || []).join(", ")}`); route(); }
+    try { const r = await api(`/api/projects/${p.id}/layers`, { method: "POST", body: fd }); toast(t("Camada enviada: {n} feições. Campos: {f}", { n: r.n_features, f: (r.fields || []).join(", ") })); route(); }
     catch (e) { fail(e); } finally { $("#lyUp").disabled = false; }
   };
-  $$("[data-dl]").forEach((b) => (b.onclick = async () => { if (confirm("Remover camada?")) { await api(`/api/layers/${b.dataset.dl}`, { method: "DELETE" }).catch(fail); route(); } }));
+  $$("[data-dl]").forEach((b) => (b.onclick = async () => { if (confirm(t("Remover camada?"))) { await api(`/api/layers/${b.dataset.dl}`, { method: "DELETE" }).catch(fail); route(); } }));
   $("#rsUp").onclick = async () => {
     const f = $("#rsFile").files[0];
     if (!f) return toast("Selecione um GeoTIFF.", true);
@@ -793,7 +794,7 @@ async function renderSetup() {
     try { await api(`/api/projects/${p.id}/rasters`, { method: "POST", body: fd }); toast("Raster enviado."); route(); }
     catch (e) { fail(e); } finally { $("#rsUp").disabled = false; }
   };
-  $$("[data-dr]").forEach((b) => (b.onclick = async () => { if (confirm("Remover raster?")) { await api(`/api/rasters/${b.dataset.dr}`, { method: "DELETE" }).catch(fail); route(); } }));
+  $$("[data-dr]").forEach((b) => (b.onclick = async () => { if (confirm(t("Remover raster?"))) { await api(`/api/rasters/${b.dataset.dr}`, { method: "DELETE" }).catch(fail); route(); } }));
   // geração
   const showStrata = () => {
     const l = layers.find((x) => x.id === Number($("#gLayer").value));
@@ -807,16 +808,16 @@ async function renderSetup() {
   $("#gGo").onclick = async () => {
     const strata = $$("[data-s]").filter((c) => c.checked).map((c) => c.dataset.s);
     const class_map = {}; $$("[data-m]").forEach((s) => s.value && (class_map[s.dataset.m] = Number(s.value)));
-    $("#gGo").disabled = true; $("#gGo").textContent = "Gerando…";
+    $("#gGo").disabled = true; $("#gGo").textContent = t("Gerando…");
     try {
       const r = await api(`/api/projects/${p.id}/chips/generate`, { method: "POST", body: {
         layer_id: Number($("#gLayer").value), n_per_stratum: Number($("#gN").value), n_background: Number($("#gBg").value),
         min_spacing_px: $("#gSp").value ? Number($("#gSp").value) : null, placement: $("#gPl").value, seed: Number($("#gSeed").value), strata, class_map } });
-      toast(`${r.created} chips criados.`); route();
-    } catch (e) { fail(e); } finally { $("#gGo").disabled = false; $("#gGo").textContent = "Gerar chips"; }
+      toast(t("{n} chips criados.", { n: r.created })); route();
+    } catch (e) { fail(e); } finally { $("#gGo").disabled = false; $("#gGo").textContent = t("Gerar chips"); }
   };
-  $("#gDel").onclick = async () => { if (!confirm("Apagar todos os chips ainda não anotados?")) return; const r = await api(`/api/projects/${p.id}/chips`, { method: "DELETE" }).catch(fail); r && toast(`${r.deleted} chips removidos.`); route(); };
-  $("#delProj").onclick = async () => { if (prompt(`Digite o nome do projeto para excluir: ${p.name}`) !== p.name) return; await api(`/api/projects/${p.id}`, { method: "DELETE" }).catch(fail); location.hash = "#/"; };
+  $("#gDel").onclick = async () => { if (!confirm(t("Apagar todos os chips ainda não anotados?"))) return; const r = await api(`/api/projects/${p.id}/chips`, { method: "DELETE" }).catch(fail); r && toast(t("{n} chips removidos.", { n: r.deleted })); route(); };
+  $("#delProj").onclick = async () => { if (prompt(t("Digite o nome do projeto para excluir: {name}", { name: p.name })) !== p.name) return; await api(`/api/projects/${p.id}`, { method: "DELETE" }).catch(fail); location.hash = "#/"; };
 }
 
 function sourceRow(s) {
@@ -901,8 +902,8 @@ async function renderExport() {
     const jobs = await api(`/api/projects/${p.id}/exports`);
     $("#jobs").innerHTML = jobs.length ? `<table><tbody>${jobs.map((j) => `<tr><td>#${j.id}<br><span class="small muted">${esc(j.created_at.slice(0, 16).replace("T", " "))}</span></td>
       <td>${j.status === "done" ? `<a href="/api/exports/${j.id}/download">⬇ ${esc(j.filename)}</a>${j.drive_file_id ? `<br><a class="small" target="_blank" href="https://drive.google.com/file/d/${esc(j.drive_file_id)}/view">abrir no Drive</a>` : ""}`
-        : j.status === "error" ? `<span style="color:var(--danger)">${esc(j.message)}</span>`
-        : `<div class="progress"><div style="width:${Math.round(100 * j.progress)}%"></div></div><span class="small muted">${esc(j.message || j.status)}</span>`}</td></tr>`).join("")}</tbody></table>`
+        : j.status === "error" ? `<span style="color:var(--danger)">${esc(tr(j.message))}</span>`
+        : `<div class="progress"><div style="width:${Math.round(100 * j.progress)}%"></div></div><span class="small muted">${esc(tr(j.message) || t(j.status))}</span>`}</td></tr>`).join("")}</tbody></table>`
       : '<p class="muted">Nenhuma exportação.</p>';
     return jobs.some((j) => j.status === "pending" || j.status === "running");
   };
@@ -931,6 +932,7 @@ async function renderTeam() {
     <div class="card"><h2>Chips por estrato</h2><table><tbody>${Object.entries(st.by_stratum).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")}</tbody></table></div>
   </div>`;
 }
+const statusLabel = (st) => ({ done: "concluída", uncertain: "incerta", skip: "pulada" }[st] || st);
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
 
 async function renderUsers() {
