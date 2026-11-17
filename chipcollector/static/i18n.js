@@ -199,6 +199,7 @@ const SERVER_PATTERNS = { en: [
   [/^Fonte '(.*)': informe data inicial e final\.$/, "Source '$1': enter a start and end date."],
   [/^Id de fonte repetido: (.*)$/, "Duplicate source id: $1"],
   [/^Fonte de imagem '(.*)' não encontrada\.$/, "Imagery source '$1' not found."],
+  [/^Erro interno \((.*)\)\. Veja o log do servidor\.$/, "Internal error ($1). See the server log."],
 ]};
 
 const norm = (s) => String(s).replace(/\s+/g, " ").trim();

@@ -226,3 +226,21 @@ def test_cloud_masks_and_sources():
     assert s["rgb"] == ["R", "G", "B"]
     with pytest.raises(ImageryError):
         normalize_source({"provider": "earth_search", "sensor": "nicfi"}, 10)
+
+
+def test_delete_project_with_annotations(env):
+    app, files = env
+    admin, pid, layer = _setup_project(app, files)
+    cid = admin.get(f"/api/projects/{pid}/next").json()["chip_id"]
+    assert admin.put(f"/api/chips/{cid}/annotation", json={"features": {"type": "FeatureCollection", "features": []}}).status_code == 200
+    admin.get(f"/api/projects/{pid}/next")  # deixa uma reserva (lock) ativa
+    r = admin.post(f"/api/projects/{pid}/exports", json={"include_images": False})
+    jid = r.json()["id"]
+    for _ in range(100):
+        if admin.get(f"/api/exports/{jid}").json()["status"] in ("done", "error"):
+            break
+        time.sleep(0.1)
+    r = admin.delete(f"/api/projects/{pid}")
+    assert r.status_code == 200, r.text
+    assert admin.get(f"/api/projects/{pid}").status_code == 404
+    assert admin.get("/api/projects").json() == []

@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from shapely.geometry import box, mapping, shape
 from shapely.validation import make_valid
-from sqlalchemy import func
+from sqlalchemy import delete, func
 from sqlmodel import Session, select
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -234,6 +234,12 @@ def create_app() -> FastAPI:
     async def _imagery_err(_, exc: ImageryError):
         return JSONResponse({"detail": str(exc)}, status_code=502)
 
+    @app.exception_handler(Exception)
+    async def _unexpected(_, exc: Exception):
+        import logging
+        logging.getLogger("chipcollector").exception("erro não tratado")
+        return JSONResponse({"detail": f"Erro interno ({type(exc).__name__}). Veja o log do servidor."}, status_code=500)
+
     @app.exception_handler(LayerError)
     async def _layer_err(_, exc: LayerError):
         return JSONResponse({"detail": str(exc)}, status_code=400)
@@ -354,17 +360,14 @@ def create_app() -> FastAPI:
     @app.delete("/api/projects/{pid}")
     def delete_project(pid: int, user: User = Depends(admin_user), session: Session = Depends(get_session)):
         p = _project_or_404(session, pid)
-        for model in (Annotation, ChipLock, ExportJob, LocalRaster, ReferenceLayer):
-            if model is ChipLock:
-                ids = session.exec(select(Chip.id).where(Chip.project_id == pid)).all()
-                for lk in session.exec(select(ChipLock).where(ChipLock.chip_id.in_(ids))).all() if ids else []:
-                    session.delete(lk)
-                continue
-            for obj in session.exec(select(model).where(model.project_id == pid)).all():
-                session.delete(obj)
-        session.commit()
-        for c in session.exec(select(Chip).where(Chip.project_id == pid)).all():
-            session.delete(c)
+        # Ordem respeita as chaves estrangeiras: o que aponta para chips/camadas sai primeiro.
+        chip_ids = select(Chip.id).where(Chip.project_id == pid)
+        session.exec(delete(ChipLock).where(ChipLock.chip_id.in_(chip_ids)))
+        session.exec(delete(Annotation).where(Annotation.project_id == pid))
+        session.exec(delete(ExportJob).where(ExportJob.project_id == pid))
+        session.exec(delete(Chip).where(Chip.project_id == pid))
+        session.exec(delete(ReferenceLayer).where(ReferenceLayer.project_id == pid))
+        session.exec(delete(LocalRaster).where(LocalRaster.project_id == pid))
         session.delete(p)
         session.commit()
         s = get_settings()
