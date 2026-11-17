@@ -1,4 +1,4 @@
-"""Linha de comando: `chipcollector serve | create-user | export | demo`."""
+"""Linha de comando: `chipcollector serve | share | create-user | set-password | export | demo`."""
 from __future__ import annotations
 
 import argparse
@@ -12,6 +12,31 @@ def _serve(a):
 
     uvicorn.run("chipcollector.app:create_app", factory=True, host=a.host, port=a.port, reload=a.reload,
                 workers=1 if a.reload else a.workers)
+
+
+def _share(a):
+    from .share import run
+
+    sys.exit(run(port=a.port, allow_weak=a.allow_demo_password))
+
+
+def _set_password(a):
+    from sqlmodel import Session, select
+
+    from .auth import hash_password
+    from .db import User, get_engine
+
+    with Session(get_engine()) as s:
+        u = s.exec(select(User).where(User.username == a.username.strip().lower())).first()
+        if not u:
+            sys.exit(f"Usuário '{a.username}' não encontrado.")
+        pwd = a.password or getpass.getpass(f"Nova senha para {u.username}: ")
+        if len(pwd) < 6:
+            sys.exit("A senha precisa ter pelo menos 6 caracteres.")
+        u.password_hash = hash_password(pwd)
+        s.add(u)
+        s.commit()
+        print(f"Senha de {u.username} alterada.")
 
 
 def _create_user(a):
@@ -64,6 +89,17 @@ def main(argv=None):
     s.add_argument("--workers", type=int, default=1)
     s.add_argument("--reload", action="store_true")
     s.set_defaults(fn=_serve)
+
+    sh = sub.add_parser("share", help="roda no seu computador e cria um endereço público temporário (Cloudflare)")
+    sh.add_argument("--port", type=int, default=8000)
+    sh.add_argument("--allow-demo-password", action="store_true",
+                    help="compartilha mesmo se alguma conta ainda usar a senha de demonstração")
+    sh.set_defaults(fn=_share)
+
+    sp = sub.add_parser("set-password", help="define a senha de um usuário existente")
+    sp.add_argument("username")
+    sp.add_argument("--password")
+    sp.set_defaults(fn=_set_password)
 
     u = sub.add_parser("create-user", help="cria usuário (use --admin para administrador)")
     u.add_argument("username")

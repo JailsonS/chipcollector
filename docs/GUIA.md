@@ -18,6 +18,7 @@ Para instalação e detalhes técnicos, veja o [README](../README.md).
 | **Coletando dados** | anotadores | [9. Trabalhar a fila de chips](#9-trabalhar-a-fila-de-chips) · [10. Rotular chips (classificação)](#10-rotular-chips-classificação) · [11. Desenhar o alvo (segmentação)](#11-desenhar-o-alvo-segmentação) · [12. Corrigir uma anotação](#12-corrigir-uma-anotação) |
 | **Validando dados** | administrador | [13. Anotação dupla e às cegas](#13-anotação-dupla-e-às-cegas) · [14. Revisar o trabalho de outra pessoa](#14-revisar-o-trabalho-de-outra-pessoa) · [15. Acompanhar o progresso](#15-acompanhar-o-progresso) |
 | **Exportando** | todos | [16. Gerar o pacote de treinamento](#16-gerar-o-pacote-de-treinamento) · [17. Enviar ao Google Drive](#17-enviar-ao-google-drive) |
+| **Publicar para teste** | quem roda a plataforma | [18. Publicar uma versão de teste](#18-publicar-uma-versão-de-teste) |
 | **Quando algo dá errado** | todos | [Problemas comuns](#problemas-comuns) |
 
 ### O ciclo completo
@@ -485,6 +486,60 @@ O que vem no pacote:
 > que ela mesma cria no seu Drive.
 
 ---
+
+## Publicar para teste
+
+### 18. Publicar uma versão de teste
+
+> **Quem:** quem roda a plataforma · **Onde:** terminal do seu computador · **Tempo:** 5 minutos na primeira vez
+>
+> *"Quero que a equipe teste pela internet, sem pagar servidor nem hospedagem."*
+
+A plataforma roda no seu computador e o Cloudflare cria um endereço HTTPS público que aponta
+para ela. Não precisa de conta, domínio nem cartão.
+
+1. Instale o `cloudflared` uma vez:
+
+   | Sistema | Comando |
+   |---|---|
+   | macOS | `brew install cloudflared` |
+   | Windows | `winget install --id Cloudflare.cloudflared` |
+   | Linux | pacote em developers.cloudflare.com (*Cloudflare Tunnel → Downloads*) |
+
+2. Se você usou os dados de demonstração, troque a senha do `admin`:
+   ```bash
+   chipcollector set-password admin
+   ```
+   O comando de publicar se recusa a abrir o túnel enquanto houver conta com a senha `admin123`.
+
+3. Publique:
+   ```bash
+   chipcollector share
+   ```
+   Em alguns segundos aparece um quadro com o **endereço público** (`https://….trycloudflare.com`).
+
+4. Crie as contas da equipe em **Usuários** ([história 3](#3-montar-a-equipe)) e envie o endereço
+   junto com usuário e senha de cada pessoa.
+
+5. Para encerrar, aperte **Ctrl+C** no terminal. O endereço deixa de funcionar na hora.
+
+> [!IMPORTANT]
+> O endereço é **diferente a cada vez** que você roda `chipcollector share`, e só funciona enquanto
+> o computador estiver ligado, acordado e com o comando aberto. Para um endereço fixo, é preciso uma
+> conta Cloudflare com túnel nomeado ou um servidor próprio.
+
+> [!NOTE]
+> Enquanto o túnel está aberto, o **cadastro público fica desligado**: só o administrador cria
+> contas. Para liberar, rode `CHIPS_ALLOW_SIGNUP=true chipcollector share`.
+
+> [!TIP]
+> Arquivos acima de **100 MB** (mosaicos grandes) não passam pelo túnel. Como a plataforma roda
+> no seu computador, envie esses arquivos pelo endereço local, `http://localhost:8000`. Eles
+> ficam disponíveis para todos na hora.
+
+O que não funciona pelo endereço temporário:
+- **conectar o Google Drive:** o Google exige um endereço de retorno fixo, cadastrado com antecedência. O download do `.zip` funciona normalmente;
+- **muitos acessos simultâneos:** o túnel gratuito aceita até 200 requisições ao mesmo tempo, o que basta para uma equipe de teste.
 
 ## Problemas comuns
 

@@ -47,6 +47,32 @@ chipcollector serve          # abra http://localhost:8000
 A senha aparece oculta ao digitar; use o botão *Mostrar* no campo para conferir.
 Para criar um usuário pelo terminal: `chipcollector create-user nome --password "senha" --admin`.
 
+### Versão de teste online, sem servidor
+
+Para que outras pessoas testem pela internet sem pagar hospedagem, rode a aplicação no seu
+computador e publique um endereço temporário com o Cloudflare Quick Tunnel (gratuito, sem conta):
+
+```bash
+# 1. instale o cloudflared (uma vez)
+brew install cloudflared                          # macOS
+winget install --id Cloudflare.cloudflared         # Windows
+# Linux: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/
+
+# 2. troque a senha de demonstração, se usou --seed
+chipcollector set-password admin
+
+# 3. publique
+chipcollector share
+```
+
+O comando mostra um endereço `https://….trycloudflare.com` para enviar à equipe. Enquanto o túnel
+estiver aberto, o cadastro público fica desligado: crie as contas em **Usuários**.
+
+Limites: o endereço muda a cada execução e só funciona com o computador ligado e o comando
+rodando; arquivos acima de 100 MB não passam pelo túnel (envie-os pelo endereço local,
+`http://localhost:8000`); e o login com Google Drive não funciona nesse endereço temporário.
+O passo a passo está no [Guia](docs/GUIA.md#18-publicar-uma-versão-de-teste).
+
 ### Docker
 
 ```bash
