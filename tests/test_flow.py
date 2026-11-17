@@ -244,3 +244,92 @@ def test_delete_project_with_annotations(env):
     assert r.status_code == 200, r.text
     assert admin.get(f"/api/projects/{pid}").status_code == 404
     assert admin.get("/api/projects").json() == []
+
+
+def test_pre_stratified_samples(env):
+    """Amostra estratificada fora do sistema: verificar, configurar, gerar 1 chip por amostra, exportar."""
+    app, files = env
+    admin, pid, _ = _setup_project(app, files)
+    n_before = len(admin.get(f"/api/projects/{pid}/chips").json())
+    with open(files["samples"], "rb") as fh:
+        r = admin.post(f"/api/projects/{pid}/layers", files=[("files", ("amostras.geojson", fh.read()))],
+                       data={"name": "Amostra externa", "theme": "desmatamento"})
+    assert r.status_code == 200, r.text
+    lay = r.json()
+    assert lay["role"] == "reference"  # nada é assumido sem o admin confirmar
+    sug = lay["suggestion"]
+    assert sug == {**sug, "role": "samples", "stratum_field": "estrato", "class_field": "classe"}
+    names = {f["name"] for f in lay["field_info"]}
+    assert {"id", "estrato", "classe"} <= names
+
+    # verificação
+    rep = admin.post(f"/api/layers/{lay['id']}/check", json={"role": "samples", "stratum_field": "estrato",
+                                                              "class_field": "classe"}).json()
+    assert rep["ok"] and rep["n_points"] > 0 and rep["n_polygons"] > 0
+    assert set(rep["by_stratum"]) == {"alteracao_corte_raso", "alteracao_seletiva", "floresta_estavel"}
+    assert rep["duplicates"] == 1 and any("sem estrato" in w for w in rep["warnings"])
+    bad = admin.post(f"/api/layers/{lay['id']}/check", json={"role": "samples", "stratum_field": "xyz"}).json()
+    assert not bad["ok"]
+    assert admin.patch(f"/api/layers/{lay['id']}", json={"role": "samples", "stratum_field": "xyz"}).status_code == 400
+
+    # configurar
+    r = admin.patch(f"/api/layers/{lay['id']}", json={"role": "samples", "stratum_field": "estrato", "class_field": "classe"})
+    assert r.status_code == 200, r.text
+    assert r.json()["role"] == "samples" and r.json()["strata"] == rep["by_stratum"]
+
+    # gerar: um chip por amostra com estrato; de novo não duplica
+    body = {"layer_id": lay["id"], "class_map": {"desmatamento": 1, "exploracao_madeireira": 2}}
+    r1 = admin.post(f"/api/projects/{pid}/chips/generate", json=body).json()
+    assert r1["created"] == rep["n_usable"] and r1["already_in_chips"] == 0
+    r2 = admin.post(f"/api/projects/{pid}/chips/generate", json=body).json()
+    assert r2["created"] == 0 and r2["already_in_chips"] == rep["n_usable"]
+    only = admin.post(f"/api/projects/{pid}/chips/generate", json={**body, "strata": ["floresta_estavel"]}).json()
+    assert only["created"] == 0
+    chips = admin.get(f"/api/projects/{pid}/chips").json()
+    assert len(chips) == n_before + rep["n_usable"]
+
+    # chip guarda a amostra e a classe de referência
+    from chipcollector.db import Chip, get_engine
+    from sqlmodel import Session, select
+    with Session(get_engine()) as s:
+        c = s.exec(select(Chip).where(Chip.layer_id == lay["id"], Chip.stratum == "alteracao_corte_raso")).first()
+        cid = c.id
+    detail = admin.get(f"/api/chips/{cid}").json()
+    smp = detail["reference"]["sample"]
+    assert smp["stratum"] == "alteracao_corte_raso" and smp["class_value"] == "desmatamento" and smp["class_id"] == 1
+    assert smp["attributes"]["id"]
+    assert detail["reference"]["features"], "a própria amostra aparece como referência"
+
+    # exportação traz sample_index e ref_class
+    assert admin.put(f"/api/chips/{cid}/annotation", json={"features": {"type": "FeatureCollection", "features": []}}).status_code == 200
+    jid = admin.post(f"/api/projects/{pid}/exports", json={"include_images": False}).json()["id"]
+    for _ in range(100):
+        j = admin.get(f"/api/exports/{jid}").json()
+        if j["status"] in ("done", "error"):
+            break
+        time.sleep(0.1)
+    assert j["status"] == "done", j
+    z = zipfile.ZipFile(io.BytesIO(admin.get(f"/api/exports/{jid}/download").content))
+    csv_name = [n for n in z.namelist() if n.endswith("labels.csv")][0]
+    import csv as _csv
+    rows = list(_csv.DictReader(io.StringIO(z.read(csv_name).decode())))
+    row = [r for r in rows if int(r["chip_id"]) == cid][0]
+    assert row["ref_class"] == "desmatamento" and row["sample_index"] != "" and row["stratum"] == "alteracao_corte_raso"
+
+
+def test_old_database_gets_new_columns(tmp_path, monkeypatch):
+    import sqlite3
+    monkeypatch.setenv("CHIPS_DATA_DIR", str(tmp_path / "d"))
+    from chipcollector import config, db
+    config.reset_settings(); db.reset_engine()
+    db.get_engine()
+    con = sqlite3.connect(tmp_path / "d" / "chipcollector.db")
+    con.executescript("create table t as select id, project_id, name, theme, kind, path, class_field, crs, n_features,"
+                      " strata, bounds, uploaded_by, created_at from referencelayer;"
+                      " drop table referencelayer; alter table t rename to referencelayer;")
+    con.close()
+    db.reset_engine()
+    added = db.add_missing_columns(db.get_engine())  # já aplicada em get_engine; rodar de novo não faz nada
+    cols = {r[1] for r in sqlite3.connect(tmp_path / "d" / "chipcollector.db").execute("pragma table_info(referencelayer)")}
+    assert {"role", "stratum_field"} <= cols and added == []
+    db.reset_engine(); config.reset_settings()

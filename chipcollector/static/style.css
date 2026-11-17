@@ -219,3 +219,18 @@ h2.danger { color: var(--danger); }
 .toolstrip.view { left: auto; right: .8rem; flex-wrap: nowrap; }
 #jobs a { overflow-wrap: anywhere; }
 #jobs td:first-child { white-space: nowrap; width: 1%; }
+
+/* configuração de camada */
+.layer-cfg { margin-top: 1rem; background: var(--canvas); box-shadow: none; }
+.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .6rem; }
+.role { display: flex; gap: .7rem; align-items: flex-start; padding: .8rem .9rem; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--panel); cursor: pointer; color: var(--ink); font-size: .92rem; margin: 0; }
+.role.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.role input { margin-top: .2rem; }
+.hint { background: var(--accent-soft); color: var(--accent); padding: .55rem .8rem; border-radius: 10px; margin: 0; }
+.check { border-top: 1px solid var(--line); padding-top: .8rem; }
+.check-ok { color: var(--ok); font-weight: 700; margin: 0 0 .4rem; }
+.check-err { color: var(--danger); font-weight: 700; margin: 0 0 .4rem; }
+.check ul { margin: .2rem 0 .6rem; padding-left: 1.2rem; font-size: .88rem; }
+.check-errors li { color: var(--danger); }
+.check-warnings li { color: var(--warn); }

@@ -14,7 +14,7 @@ Para instalação e detalhes técnicos, veja o [README](../README.md).
 |---|---|---|
 | **Primeiros passos** | todos | [1. Entrar pela primeira vez](#1-entrar-pela-primeira-vez) · [2. Trocar idioma e senha](#2-trocar-idioma-e-senha) |
 | **Administração** | administrador | [3. Montar a equipe](#3-montar-a-equipe) |
-| **Configurando um projeto** | administrador | [4. Criar o projeto](#4-criar-o-projeto) · [5. Escolher as bases de imagem](#5-escolher-as-bases-de-imagem) · [6. Carregar as camadas de referência](#6-carregar-as-camadas-de-referência) · [7. Gerar os chips](#7-gerar-os-chips) · [8. Criar um chip com um clique](#8-criar-um-chip-com-um-clique) |
+| **Configurando um projeto** | administrador | [4. Criar o projeto](#4-criar-o-projeto) · [5. Escolher as bases de imagem](#5-escolher-as-bases-de-imagem) · [6. Carregar e configurar as camadas](#6-carregar-e-configurar-as-camadas) · [7. Gerar os chips](#7-gerar-os-chips) · [8. Criar um chip com um clique](#8-criar-um-chip-com-um-clique) |
 | **Coletando dados** | anotadores | [9. Trabalhar a fila de chips](#9-trabalhar-a-fila-de-chips) · [10. Rotular chips (classificação)](#10-rotular-chips-classificação) · [11. Desenhar o alvo (segmentação)](#11-desenhar-o-alvo-segmentação) · [12. Corrigir uma anotação](#12-corrigir-uma-anotação) |
 | **Validando dados** | administrador | [13. Anotação dupla e às cegas](#13-anotação-dupla-e-às-cegas) · [14. Revisar o trabalho de outra pessoa](#14-revisar-o-trabalho-de-outra-pessoa) · [15. Acompanhar o progresso](#15-acompanhar-o-progresso) |
 | **Exportando** | todos | [16. Gerar o pacote de treinamento](#16-gerar-o-pacote-de-treinamento) · [17. Enviar ao Google Drive](#17-enviar-ao-google-drive) |
@@ -193,31 +193,68 @@ Na lista ao lado você pode, a qualquer momento:
 
 > [!NOTE]
 > Para usar um mosaico seu (drone, CBERS, NICFI baixado), envie primeiro o arquivo em
-> **Rasters locais** ([história 6](#6-carregar-as-camadas-de-referência)) e depois crie uma base com
+> **Rasters locais** ([história 6](#6-carregar-e-configurar-as-camadas)) e depois crie uma base com
 > provedor **Raster local**.
 
 ---
 
-### 6. Carregar as camadas de referência
+### 6. Carregar e configurar as camadas
 
-> **Quem:** administrador · **Onde:** Configurar → **03 / Camadas de referência** · **Tempo:** 2 minutos
+> **Quem:** administrador · **Onde:** Configurar → **03 / Camadas de referência e amostras** · **Tempo:** 3 minutos
 >
-> *"Tenho os polígonos do PRODES com a classe de cada um e quero sortear chips a partir deles."*
+> *"A equipe de estatística já fez o desenho amostral e me mandou os pontos e polígonos com o estrato
+> de cada amostra. Quero que cada um vire um chip."* ou *"Tenho os polígonos do PRODES e quero que o
+> sistema sorteie os chips."*
 
-![Camadas de referência e rasters locais](guia/07-config-camadas.png)
+![Camadas carregadas, cada uma com o seu papel](guia/07-config-camadas.png)
 
-1. Em **Arquivo(s)**, escolha a camada:
-   - **vetor:** GeoPackage, GeoJSON, KML, FlatGeobuf, GeoParquet ou Shapefile (envie o `.zip` ou os arquivos `.shp`, `.dbf`, `.shx`, `.prj` juntos);
-   - **raster categórico:** GeoTIFF com um número inteiro por classe (ex.: MapBiomas).
-2. Dê um **Nome** e um **Tema** (ex.: "PRODES 2023", tema "desmatamento").
-3. Para vetores, informe o **Campo de classe**: a coluna que separa os tipos de feição (ex.: `classe`). É ela que define os **estratos**.
-4. Clique em **Enviar camada**. A tabela abaixo mostra quantas feições há em cada estrato.
+Toda camada tem um **papel**, e é você quem diz qual é:
 
-No quadro **Rasters locais**, ao lado, você envia mosaicos próprios para usar como base de imagem.
+| Papel | Quando usar | O que o sistema faz |
+|---|---|---|
+| **Amostra já estratificada** | O desenho amostral foi feito fora do sistema | Cada ponto ou polígono vira **um chip**, centrado nele. Nada é sorteado |
+| **Referência para sortear** | Você tem feições de referência e quer que o sistema escolha as amostras | Estratifica pelas classes e **sorteia** chips dentro das feições ([história 7](#7-gerar-os-chips)) |
+
+**Enviar**
+
+1. Em **Arquivo(s)**, escolha o arquivo:
+   - **vetor:** GeoPackage, GeoJSON, KML, FlatGeobuf, GeoParquet ou Shapefile (o `.zip` ou os arquivos `.shp`, `.dbf`, `.shx`, `.prj` juntos);
+   - **raster categórico:** GeoTIFF com um número inteiro por classe (ex.: MapBiomas). Raster é sempre *referência para sortear*.
+2. Dê um **Nome** e um **Tema** e clique em **Enviar camada**.
+
+**Configurar** (abre sozinho depois do envio, ou pelo botão **Configurar** na linha da camada)
+
+![Configuração de uma amostra já estratificada, com a verificação](guia/07b-config-amostra.png)
+
+3. Escolha o **papel**. O sistema dá uma sugestão quando o arquivo tem um campo parecido com
+   "estrato" ou só tem pontos, mas a decisão é sua.
+4. Escolha os **campos** nas listas. Abaixo de cada uma aparecem exemplos de valores, para conferir:
+   - *Amostra já estratificada:* **Campo do estrato** (obrigatório, o estrato do desenho amostral) e **Campo da classe de referência** (opcional, a classe que a equipe atribuiu a cada amostra);
+   - *Referência para sortear:* **Campo de classe**, que define os estratos do sorteio.
+5. Clique em **Verificar** e leia o relatório. Depois clique em **Salvar configuração**.
+
+O que a verificação confere:
+
+| Resultado | O que significa | O que fazer |
+|---|---|---|
+| Erro: campo não existe | O campo escolhido não está no arquivo | Escolha outro campo |
+| Erro: feições que não são pontos nem polígonos | O arquivo tem linhas ou outras geometrias | Remova-as do arquivo e envie de novo |
+| Aviso: amostras sem estrato | Linhas com o campo do estrato vazio | Serão ignoradas. Corrija no arquivo, se não era a intenção |
+| Aviso: parece um identificador | O campo tem quase um valor diferente por amostra | Provavelmente você escolheu o `id`; escolha o campo do estrato |
+| Aviso: geometria repetida | Duas amostras no mesmo lugar | Viram dois chips iguais. Confira com quem fez a amostra |
+| Aviso: próximas demais | Amostras mais perto uma da outra do que o tamanho do chip | Os chips vão se sobrepor. Comum em amostras densas; decida se é aceitável |
+| Aviso: polígonos maiores que o chip | O polígono não cabe no chip | O chip fica centrado no polígono e mostra só uma parte dele |
+
+A tabela do relatório mostra quantas amostras há em cada estrato e, se houver campo de classe, o
+cruzamento **estrato × classe de referência**. Confira se bate com o desenho amostral.
+
+> [!NOTE]
+> Erros impedem salvar. Avisos não impedem: o sistema mostra, e você decide.
 
 > [!TIP]
-> Se não souber o nome do campo, envie sem preencher: a mensagem de confirmação lista todos os
-> campos da camada. Depois envie de novo com o campo certo.
+> Se o estrato e a classe forem a mesma coisa no seu arquivo, escolha o mesmo campo nos dois.
+
+No quadro **Rasters locais**, logo abaixo, você envia mosaicos próprios para usar como base de imagem.
 
 ---
 
@@ -225,12 +262,27 @@ No quadro **Rasters locais**, ao lado, você envia mosaicos próprios para usar 
 
 > **Quem:** administrador · **Onde:** Configurar → **04 / Gerar chips** · **Tempo:** 1 minuto
 >
-> *"Quero 50 chips de cada classe, mais 30 chips sem o alvo, sem sobreposição entre eles."*
+> *"Quero transformar a amostra em chips para a equipe começar a anotar."*
 
-![Gerar chips](guia/08-config-gerar-chips.png)
+Escolha a **Camada**. A tela muda conforme o papel dela.
 
-1. Escolha a **Camada**.
-2. Defina:
+**Se a camada é uma amostra já estratificada**
+
+![Gerar chips a partir da amostra pronta](guia/08b-gerar-amostra.png)
+
+1. Marque os estratos que entram (por padrão, todos).
+2. Se a camada tem classe de referência, ligue cada classe do arquivo a uma classe do projeto em
+   **Classe do projeto (pré-rotulagem)**. Classes sem correspondência ficam em branco.
+3. Clique em **Gerar chips**. Cada amostra vira um chip.
+
+Pode clicar em **Gerar chips** de novo sem medo: amostras que já viraram chip **não são repetidas**.
+Isso permite gerar um estrato agora e outro depois.
+
+**Se a camada é referência para sortear**
+
+![Gerar chips por sorteio](guia/08-config-gerar-chips.png)
+
+1. Defina:
 
    | Campo | Para que serve |
    |---|---|
@@ -240,19 +292,19 @@ No quadro **Rasters locais**, ao lado, você envia mosaicos próprios para usar 
    | **Posição** | *Aleatória dentro da feição* (variedade) ou *centro da feição* (um chip por feição) |
    | **Semente** | O mesmo número gera o mesmo sorteio |
 
-3. Na tabela de estratos, marque quais usar e, em **Classe do projeto (pré-rotulagem)**, ligue cada estrato a uma classe.
-4. Clique em **Gerar chips**.
+2. Na tabela de estratos, marque quais usar e ligue cada estrato a uma classe do projeto.
+3. Clique em **Gerar chips**. Gerar de novo **acrescenta** um novo sorteio.
 
-**Resultado:** os chips entram na fila de anotação, misturados entre os estratos.
+**Resultado, nos dois casos:** os chips entram na fila de anotação, misturados entre os estratos.
 
 > [!TIP]
-> A **pré-rotulagem** faz a referência aparecer tracejada, já com a cor da classe, na tela de
-> anotação. Em projetos de segmentação, o anotador pode copiar esses polígonos e só ajustar os
-> vértices ([história 11](#11-desenhar-o-alvo-segmentação)).
+> A **pré-rotulagem** faz a referência aparecer tracejada, na cor da classe, na tela de anotação.
+> Em projetos de segmentação, o anotador pode copiar esses polígonos e só ajustar os vértices
+> ([história 11](#11-desenhar-o-alvo-segmentação)).
 
 > [!NOTE]
-> Gerar de novo **acrescenta** chips; não apaga os existentes. Para recomeçar o sorteio, use
-> **Apagar chips sem anotação**. Chips já anotados nunca são apagados por esse botão.
+> Para recomeçar, use **Apagar chips sem anotação**. Chips já anotados nunca são apagados por esse
+> botão. Numa amostra pronta, as amostras apagadas voltam a poder virar chip.
 
 ---
 
@@ -318,7 +370,16 @@ Toda anotação termina com um destes três botões:
 
 ![Anotação por classificação](guia/10-anotar-classificacao.png)
 
+<details>
+<summary>Ver um chip vindo de amostra já estratificada</summary>
+
+![Chip de amostra, com identificador e classe de referência](guia/10b-chip-de-amostra.png)
+
+</details>
+
 1. Olhe a imagem. A referência aparece tracejada (tecla **R** mostra ou esconde).
+   Em chips que vieram de uma amostra pronta, o painel mostra o identificador da amostra e a
+   classe de referência dela, e o ponto da amostra aparece como um anel no centro do chip.
 2. Escolha o rótulo:
    - classe única: **1** = Presente, **0** = Ausente;
    - várias classes: **1**, **2**, **3**… para cada classe; **0** = nenhuma. Se o projeto aceita várias classes por chip, cada tecla liga ou desliga aquela classe.
@@ -408,6 +469,7 @@ calcula a concordância entre eles (kappa, IoU) e decide o que fazer com os chip
 4. Se concordar, faça a sua própria anotação e salve. Ela conta como a segunda opinião daquele chip.
 
 O que ajuda a validar:
+- em chips de **amostra já estratificada**, a exportação traz a **classe de referência** (`ref_class`) ao lado do rótulo de cada anotador. Isso permite medir a concordância entre a equipe de anotação e a referência;
 - o status **Incerto** marca os chips em que o próprio anotador teve dúvida;
 - a exportação traz o autor de cada anotação, para revisar por pessoa;
 - o **Comentário** de cada anotação aparece no `labels.csv`.
@@ -460,7 +522,7 @@ O que vem no pacote:
 | `images/<base>/chip_000123.tif` | Imagem multibanda de cada chip, georreferenciada |
 | `masks/chip_000123__<usuario>.tif` | Máscara de segmentação (0 = fundo, n = id da classe) |
 | `coco/<base>.json` | Anotações no formato COCO (Detectron2, MMDetection) |
-| `labels.csv` | Uma linha por anotação: chip, autor, status, rótulos, divisão, caminhos dos arquivos |
+| `labels.csv` | Uma linha por anotação: chip, autor, status, rótulos, divisão, caminhos dos arquivos. Para amostras prontas, também `stratum`, `sample_index` (posição da feição no arquivo enviado) e `ref_class` |
 | `annotations.geojson`, `chips.geojson` | Polígonos e contornos dos chips, para abrir no QGIS |
 | `metadata.json` | Configuração do projeto, classes, bases e contagens |
 

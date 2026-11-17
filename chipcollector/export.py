@@ -4,7 +4,9 @@ Estrutura do pacote (zip):
 
     <projeto>_<data>/
       metadata.json             configuração do projeto, classes, fontes, contagens, autores
-      labels.csv                1 linha por anotação: chip, autor, status, rótulos, split, caminhos
+      labels.csv                1 linha por anotação: chip, autor, status, rótulos, split, caminhos;
+                                para amostras estratificadas fora do sistema, também sample_index
+                                (posição da feição no arquivo enviado) e ref_class (classe de referência)
       chips.geojson             contorno de cada chip (WGS84) com rótulos e autoria
       annotations.geojson       polígonos anotados (WGS84) — segmentação
       images/<fonte>/chip_000001.tif   GeoTIFF float32 multibanda na grade do chip
@@ -168,10 +170,16 @@ def build_dataset(session: Session, project: Project, options: dict[str, Any], o
             "source_used": a.source_id, "stratum": chip.stratum, "split": split[a.chip_id],
             "lon": round(chip.lon, 7), "lat": round(chip.lat, 7), "epsg": chip.epsg,
             "size_px": chip.size_px, "resolution_m": chip.resolution_m,
+            "sample_index": "", "ref_class": "", "ref_class_id": "",
             "label_ids": ";".join(map(str, labels)),
             "label_names": ";".join(cname.get(i, str(i)) for i in labels),
             "present": int(bool(labels)),
         }
+        smp = (chip.reference or {}).get("sample") or {}
+        if smp:  # chip vindo de amostra estratificada fora do sistema
+            row["sample_index"] = smp.get("index", "")
+            row["ref_class"] = smp.get("class_value") or ""
+            row["ref_class_id"] = "" if smp.get("class_id") is None else smp["class_id"]
         for c in classes:
             row[f"cls_{safe_id(c['name'])}"] = int(int(c["id"]) in labels)
         if seg:
@@ -187,7 +195,8 @@ def build_dataset(session: Session, project: Project, options: dict[str, Any], o
 
         chip_feats.append({"type": "Feature", "geometry": mapping(grid.footprint_wgs84()),
                            "properties": {k2: row[k2] for k2 in ("chip_id", "annotation_id", "annotator", "status",
-                                                                 "stratum", "split", "label_names", "present")}})
+                                                                 "stratum", "sample_index", "ref_class", "split",
+                                                                 "label_names", "present")}})
         if seg:
             fc = fc_transform(a.geometry, lambda g, e=chip.epsg: reproject_geom(g, e, 4326))
             for f in fc["features"]:

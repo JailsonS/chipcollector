@@ -19,7 +19,7 @@ comuns são suportadas: **classificação** (rótulo por chip) e **segmentação
 |---|---|
 | **1. Acesso multiusuário** | Contas com login (senha PBKDF2, sessão por cookie assinado), papéis *administrador* / *anotador*. Cada anotação grava o autor e data. Fila de chips com **reserva** (lock) para evitar que dois usuários anotem o mesmo chip ao mesmo tempo; opção de *N anotadores por chip* para medir concordância. Painel de progresso por usuário. |
 | **2. Ambiente web** | Servidor FastAPI + interface no navegador (Leaflet + Leaflet‑Geoman, empacotados localmente). Roda em servidor ou no próprio computador (`chipcollector serve`), com ou sem Docker. |
-| **3. Dados de referência** | Upload de camadas **vetoriais** (GPKG, GeoJSON, Shapefile zipado, KML, FlatGeobuf, GeoParquet) estratificadas por um campo de classe, ou **matriciais** categóricas (GeoTIFF, ex.: MapBiomas, PRODES). Várias camadas por projeto, cada uma com tema. |
+| **3. Dados de referência** | Upload de camadas **vetoriais** (GPKG, GeoJSON, Shapefile zipado, KML, FlatGeobuf, GeoParquet) ou **matriciais** categóricas (GeoTIFF, ex.: MapBiomas, PRODES). Cada camada tem um papel: **amostra já estratificada** fora do sistema (pontos e/ou polígonos; o admin indica o campo do estrato e o da classe de referência, e cada feição vira um chip) ou **referência para sortear** (o sistema estratifica pelas classes e sorteia os chips). Uma verificação confere campos, geometrias, amostras sem estrato, duplicadas e sobrepostas antes de gerar. |
 | **4a. Tamanho do chip** | Definido por projeto (pixels) + resolução (m/pixel). Grade alinhada em UTM local. |
 | **4b. Número de classes** | Classe única (presença/ausência) ou múltiplas classes, com opção de uma ou várias classes por chip. |
 | **4c. Diferentes bases de imagem** | Cada projeto tem várias “bases” (sensor + período + nuvens + composição). Sensores: **Sentinel‑2, Landsat 8/9, Landsat 5/7, Sentinel‑1** (Planetary Computer, gratuito), Sentinel‑2 (Earth Search/AWS, gratuito), **Google Earth Engine** (gratuito p/ ONGs: S2, Landsat, S1, **Planet NICFI**, qualquer coleção) e **rasters locais**. Troca de base, composição RGB, contraste e comparação com transparência durante a anotação. |
@@ -91,11 +91,16 @@ docker compose exec app chipcollector create-user maria --password "senha123"
 2. **Configurar → Bases de imagem**: adicione uma ou mais bases (ex.: *Sentinel‑2 seca 2024*,
    *Landsat 2015*, *NICFI 2023‑06*). Todas são reamostradas para a grade do chip, então uma
    anotação feita sobre um sensor vale para os demais.
-3. **Configurar → Camadas de referência**: envie a camada e informe o campo de classe.
-4. **Configurar → Gerar chips**: escolha estratos, quantidade por estrato, chips de *fundo*
-   (negativos, fora das feições), espaçamento mínimo, posição e o mapeamento estrato → classe
-   (pré-rotulagem que aparece como referência tracejada). Chips também podem ser criados com um
-   clique na aba **Mapa**.
+3. **Configurar → Camadas de referência e amostras**: envie a camada e diga o papel dela.
+   - *Amostra já estratificada* (desenho amostral feito fora do sistema): escolha o campo do estrato
+     e, se houver, o da classe de referência. Clique em **Verificar** para conferir o arquivo.
+   - *Referência para sortear*: escolha o campo de classe, que define os estratos.
+4. **Configurar → Gerar chips**:
+   - amostra pronta: cada ponto ou polígono vira um chip; gerar de novo não duplica;
+   - referência: escolha quantidade por estrato, chips de *fundo* (negativos, fora das feições),
+     espaçamento mínimo e posição.
+   Nos dois casos, ligue as classes do arquivo às classes do projeto (pré-rotulagem, que aparece
+   como referência tracejada). Chips também podem ser criados com um clique na aba **Mapa**.
 5. **Anotar**: cada usuário recebe o próximo chip livre da fila (filtrável por estrato).
 6. **Exportar**: escolha bases, status, divisão treino/val/teste e destino.
 

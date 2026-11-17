@@ -25,8 +25,9 @@ from .db import (Annotation, Chip, ChipLock, ExportJob, LocalRaster, Project, Re
                  get_engine, get_session, utcnow)
 from .geo import grid_from_chip
 from .imagery import ImageryError, catalog, normalize_source, render_png
-from .layers import LayerError, inspect_layer, is_raster, read_vector, store_upload
-from .sampling import SamplingParams, manual_chip, reference_to_pixels, sample_layer
+from .layers import (LayerError, check_samples, count_values, inspect_layer, is_raster, norm_value, read_vector,
+                     store_upload)
+from .sampling import SamplingParams, manual_chip, reference_to_pixels, sample_layer, samples_to_chips
 from .service import cache_path, chip_image, get_source
 
 STATIC = Path(__file__).parent / "static"
@@ -95,6 +96,14 @@ class GenerateIn(BaseModel):
     min_spacing_px: Optional[int] = Field(None, ge=0)
     placement: str = Field("random", pattern="^(random|centroid)$")
     seed: int = 42
+
+
+class LayerConfigIn(BaseModel):
+    role: Optional[str] = Field(None, pattern="^(reference|samples)$")
+    stratum_field: Optional[str] = None
+    class_field: Optional[str] = None
+    name: Optional[str] = None
+    theme: Optional[str] = None
 
 
 class ManualChipIn(BaseModel):
@@ -376,43 +385,115 @@ def create_app() -> FastAPI:
         return {"ok": True}
 
     # ------------------------------------------------------------------ camadas de referência
+    def _layer_or_404(session: Session, lid: int) -> ReferenceLayer:
+        layer = session.get(ReferenceLayer, lid)
+        if not layer:
+            raise HTTPException(404, "Camada não encontrada.")
+        return layer
+
+    def _layer_dict(session: Session, layer: ReferenceLayer) -> dict:
+        d = layer.model_dump()
+        d["created_at"] = layer.created_at.isoformat()
+        d["n_chips"] = session.exec(select(func.count()).select_from(Chip).where(Chip.layer_id == layer.id)).one()
+        return d
+
+    def _check(layer: ReferenceLayer, project: Project, role: str, stratum_field: str, class_field: str) -> dict:
+        """Relatório de verificação no mesmo formato para os dois papéis."""
+        if layer.kind == "raster":
+            if role == "samples":
+                return {"ok": False, "errors": ["Amostras prontas precisam ser um arquivo vetorial (pontos ou polígonos)."],
+                        "warnings": [], "by_stratum": {}}
+            return {"ok": True, "errors": [], "warnings": [], "by_stratum": layer.strata, "n_usable": layer.n_features}
+        if role == "samples":
+            return check_samples(layer.path, stratum_field, class_field, project.chip_size_px, project.resolution_m)
+        gdf = read_vector(layer.path)
+        errors, warnings, by = [], [], {}
+        if class_field and class_field not in gdf.columns:
+            errors.append(f"Campo de classe '{class_field}' não existe no arquivo.")
+        elif class_field:
+            by = count_values(gdf, class_field)
+            empty = int(len(gdf) - sum(by.values()))
+            if empty:
+                warnings.append(f"{empty} feição(ões) sem classe não serão sorteadas.")
+        else:
+            by = {"__all__": int(len(gdf))}
+            warnings.append("Sem campo de classe: todas as feições formam um único estrato.")
+        return {"ok": not errors, "errors": errors, "warnings": warnings, "by_stratum": by,
+                "n_usable": int(sum(by.values()))}
+
     @app.post("/api/projects/{pid}/layers")
     async def upload_layer(pid: int, files: list[UploadFile] = File(...), name: str = Form(""),
-                           theme: str = Form(""), class_field: str = Form(""),
+                           theme: str = Form(""), class_field: str = Form(""), role: str = Form(""),
+                           stratum_field: str = Form(""),
                            user: User = Depends(admin_user), session: Session = Depends(get_session)):
+        """Envia a camada. O papel e os campos podem vir aqui ou ser definidos depois (PATCH)."""
         _project_or_404(session, pid)
         payload = [(f.filename or "arquivo", await f.read()) for f in files]
         main = store_upload(payload, get_settings().data_dir / "layers" / str(pid))
         try:
-            info = inspect_layer(main, class_field)
+            info = inspect_layer(main)
+            if info["kind"] == "vector" and (class_field or stratum_field):
+                info = inspect_layer(main, class_field, role or "reference", stratum_field)
         except Exception:
             shutil.rmtree(main.parent, ignore_errors=True)
             raise
+        is_vec = info["kind"] == "vector"
         layer = ReferenceLayer(project_id=pid, name=name or main.stem, theme=theme, kind=info["kind"],
-                               path=str(main), class_field=class_field if info["kind"] == "vector" else "",
+                               path=str(main), role=(role if is_vec and role in ("reference", "samples") else "reference"),
+                               stratum_field=stratum_field if is_vec else "", class_field=class_field if is_vec else "",
                                crs=info["crs"], n_features=info["n_features"], strata=info["strata"],
                                bounds=info["bounds"], uploaded_by=user.id)
         session.add(layer)
         session.commit()
         session.refresh(layer)
-        return {**layer.model_dump(), "fields": info.get("fields", []), "geom_types": info.get("geom_types", [])}
+        return {**_layer_dict(session, layer), "fields": info.get("fields", []), "field_info": info.get("field_info", []),
+                "geom_types": info.get("geom_types", []), "suggestion": info.get("suggestion")}
 
     @app.get("/api/projects/{pid}/layers")
     def list_layers(pid: int, user: User = Depends(current_user), session: Session = Depends(get_session)):
-        return [l.model_dump() for l in session.exec(select(ReferenceLayer).where(ReferenceLayer.project_id == pid)).all()]
+        return [_layer_dict(session, l) for l in
+                session.exec(select(ReferenceLayer).where(ReferenceLayer.project_id == pid)).all()]
 
-    @app.get("/api/layers/{lid}/inspect")
-    def inspect(lid: int, class_field: str = "", save: bool = False, user: User = Depends(current_user),
-                session: Session = Depends(get_session)):
-        layer = session.get(ReferenceLayer, lid)
-        if not layer:
-            raise HTTPException(404, "Camada não encontrada.")
-        info = inspect_layer(layer.path, class_field)
-        if save and user.is_admin and layer.kind == "vector":
-            layer.class_field, layer.strata, layer.n_features = class_field, info["strata"], info["n_features"]
-            session.add(layer)
-            session.commit()
-        return info
+    @app.get("/api/layers/{lid}/fields")
+    def layer_fields(lid: int, user: User = Depends(admin_user), session: Session = Depends(get_session)):
+        """Campos do arquivo com exemplos de valores, tipos de geometria e a configuração sugerida."""
+        layer = _layer_or_404(session, lid)
+        if layer.kind == "raster":
+            return {"kind": "raster", "field_info": [], "geom_types": [], "suggestion": {"role": "reference"}}
+        info = inspect_layer(layer.path)
+        return {k: info[k] for k in ("kind", "field_info", "geom_types", "suggestion", "n_features")}
+
+    @app.post("/api/layers/{lid}/check")
+    def layer_check(lid: int, body: LayerConfigIn, user: User = Depends(admin_user),
+                    session: Session = Depends(get_session)):
+        layer = _layer_or_404(session, lid)
+        project = _project_or_404(session, layer.project_id)
+        return _check(layer, project, body.role or layer.role, body.stratum_field or "", body.class_field or "")
+
+    @app.patch("/api/layers/{lid}")
+    def configure_layer(lid: int, body: LayerConfigIn, user: User = Depends(admin_user),
+                        session: Session = Depends(get_session)):
+        """Define o papel da camada e os campos de estrato e classe (confere antes de salvar)."""
+        layer = _layer_or_404(session, lid)
+        project = _project_or_404(session, layer.project_id)
+        role = body.role or layer.role
+        sf = layer.stratum_field if body.stratum_field is None else body.stratum_field
+        cf = layer.class_field if body.class_field is None else body.class_field
+        if body.role is not None or body.stratum_field is not None or body.class_field is not None:
+            rep_ = _check(layer, project, role, sf, cf)
+            if not rep_["ok"]:
+                raise HTTPException(400, rep_["errors"][0])
+            if layer.kind == "vector":
+                layer.role, layer.stratum_field, layer.class_field = role, sf, cf
+                layer.strata = rep_["by_stratum"]
+        if body.name is not None:
+            layer.name = body.name
+        if body.theme is not None:
+            layer.theme = body.theme
+        session.add(layer)
+        session.commit()
+        session.refresh(layer)
+        return _layer_dict(session, layer)
 
     @app.get("/api/layers/{lid}/geojson")
     def layer_geojson(lid: int, max_features: int = Query(3000, le=20000), user: User = Depends(current_user),
@@ -428,9 +509,9 @@ def create_app() -> FastAPI:
         if len(gdf) > max_features:
             gdf = gdf.sample(max_features, random_state=0)
         gdf["geometry"] = gdf.geometry.simplify(0.0002, preserve_topology=True)
-        cols = [layer.class_field] if layer.class_field else []
-        out = gdf[cols + ["geometry"]].copy()
-        out["stratum"] = gdf[layer.class_field].astype(str) if layer.class_field else "__all__"
+        group = layer.stratum_field if layer.role == "samples" else layer.class_field
+        out = gdf[["geometry"]].copy()
+        out["stratum"] = gdf[group].map(norm_value) if group and group in gdf.columns else "__all__"
         return Response(out[["stratum", "geometry"]].to_json(), media_type="application/geo+json")
 
     @app.delete("/api/layers/{lid}")
@@ -492,9 +573,22 @@ def create_app() -> FastAPI:
         layer = session.get(ReferenceLayer, body.layer_id)
         if not layer or layer.project_id != pid:
             raise HTTPException(404, "Camada não encontrada no projeto.")
-        params = SamplingParams.from_dict({**body.model_dump(), "class_field": body.class_field
-                                           if body.class_field is not None else layer.class_field})
-        specs = sample_layer(layer.path, params, p.chip_size_px, p.resolution_m)
+        skipped = 0
+        if layer.role == "samples":
+            # amostra pronta: um chip por feição; as que já viraram chip não são repetidas
+            done = set()
+            for ref in session.exec(select(Chip.reference).where(Chip.layer_id == layer.id)).all():
+                idx = ((ref or {}).get("sample") or {}).get("index")
+                if idx is not None:
+                    done.add(int(idx))
+            cmap = {str(k): int(v) for k, v in body.class_map.items() if v not in (None, "")}
+            specs = samples_to_chips(layer.path, layer.stratum_field, layer.class_field, p.chip_size_px,
+                                     p.resolution_m, strata=body.strata, class_map=cmap, skip=done)
+            skipped = len(done)
+        else:
+            params = SamplingParams.from_dict({**body.model_dump(), "class_field": body.class_field
+                                               if body.class_field is not None else layer.class_field})
+            specs = sample_layer(layer.path, params, p.chip_size_px, p.resolution_m)
         random.Random(body.seed).shuffle(specs)  # intercala estratos na fila de anotação
         for s in specs:
             g = s.grid
@@ -505,7 +599,7 @@ def create_app() -> FastAPI:
         by = {}
         for s in specs:
             by[s.stratum] = by.get(s.stratum, 0) + 1
-        return {"created": len(specs), "by_stratum": by}
+        return {"created": len(specs), "by_stratum": by, "already_in_chips": skipped, "role": layer.role}
 
     @app.post("/api/projects/{pid}/chips/manual")
     def add_manual_chip(pid: int, body: ManualChipIn, user: User = Depends(current_user),

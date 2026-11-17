@@ -4,6 +4,9 @@ Gera, numa área perto de Castanhal-PA:
   * reference_desmatamento.gpkg — polígonos com campo `classe` (desmatamento / exploracao_madeireira)
   * reference_uso_cobertura.tif — raster categórico (1 floresta, 2 pasto, 3 água)
   * mosaico_demo.tif — "imagem" de 4 bandas (B,G,R,NIR) a 10 m em UTM 23S, coerente com a referência
+  * amostras_estratificadas.geojson — amostra já estratificada "fora do sistema": pontos e polígonos com
+    os campos `id`, `estrato` (desenho amostral) e `classe` (referência). Traz de propósito uma amostra
+    sem estrato e uma duplicada, para a verificação ter o que apontar.
 """
 from __future__ import annotations
 
@@ -73,8 +76,29 @@ def create_demo(out: Path, seed: int = 0, size: int = 1200, res: float = 10.0) -
         dst.write(img)
         for i, n in enumerate(["B", "G", "R", "N"], start=1):
             dst.set_band_description(i, n)
-    print(f"Dados de demonstração em {out.resolve()}:\n  {vpath.name}\n  {lulc_path.name}\n  {mpath.name}")
-    return {"vector": vpath, "raster_ref": lulc_path, "mosaic": mpath}
+    # amostra estratificada externa (pontos + polígonos, estrato e classe em campos separados)
+    rows = []
+    for i, (g, c) in enumerate(zip(polys, classes)):
+        if i % 3 == 0:  # parte das amostras vem como polígono (a própria área), parte como ponto
+            geom, est = g, "alteracao_" + ("corte_raso" if c == "desmatamento" else "seletiva")
+        else:
+            geom, est = g.representative_point(), "alteracao_" + ("corte_raso" if c == "desmatamento" else "seletiva")
+        rows.append({"id": f"A{i + 1:03d}", "estrato": est, "classe": c, "geometry": geom})
+    k = 0
+    while k < 12:  # pontos em área sem alteração (estrato de floresta estável)
+        pt = Point(minx + rng.uniform(0.05, 0.95) * size * res, maxy - rng.uniform(0.05, 0.95) * size * res)
+        if any(g.distance(pt) < 400 for g in polys):
+            continue
+        k += 1
+        rows.append({"id": f"F{k:03d}", "estrato": "floresta_estavel", "classe": "floresta", "geometry": pt})
+    rows.append({"id": "X001", "estrato": None, "classe": "floresta", "geometry": rows[-1]["geometry"].buffer(1)})
+    rows.append(dict(rows[1], id="D001"))  # duplicada
+    samples = gpd.GeoDataFrame(rows, crs=EPSG).to_crs(4326)
+    spath = out / "amostras_estratificadas.geojson"
+    samples.to_file(spath, driver="GeoJSON")
+
+    print(f"Dados de demonstração em {out.resolve()}:\n  {vpath.name}\n  {lulc_path.name}\n  {mpath.name}\n  {spath.name}")
+    return {"vector": vpath, "raster_ref": lulc_path, "mosaic": mpath, "samples": spath}
 
 
 def seed_demo(out: Path, username: str = "admin", password: str = "admin123") -> int:

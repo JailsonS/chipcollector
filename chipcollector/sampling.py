@@ -13,8 +13,8 @@ from rasterio.enums import Resampling
 from rasterio.vrt import WarpedVRT
 from shapely.geometry import Point, box, mapping, shape
 
-from .geo import ChipGrid, chip_grid, transformer
-from .layers import is_raster, read_vector
+from .geo import ChipGrid, chip_grid, reproject_geom, transformer
+from .layers import is_raster, norm_value, read_vector
 
 BACKGROUND = "__background__"
 
@@ -97,7 +97,7 @@ def clip_vector_reference(gdf: gpd.GeoDataFrame, grid: ChipGrid, class_field: st
             g = row.geometry.intersection(cbox)
             if g.is_empty:
                 continue
-            stratum = str(row[class_field]) if class_field else "__all__"
+            stratum = (norm_value(row[class_field]) or "") if class_field else "__all__"
             props = {"stratum": stratum, "class_id": class_map.get(stratum)}
             feats.append({"type": "Feature", "properties": props, "geometry": mapping(g)})
     return {"type": "FeatureCollection", "features": feats}
@@ -107,8 +107,9 @@ def _sample_vector(path: str, params: SamplingParams, size_px: int, res: float) 
     rng = np.random.default_rng(params.seed)
     gdf = read_vector(path)
     cf = params.class_field
-    gdf["_stratum"] = gdf[cf].astype(str) if cf else "__all__"
-    strata = params.strata or sorted(gdf["_stratum"].unique().tolist())
+    gdf["_stratum"] = gdf[cf].map(norm_value) if cf else "__all__"
+    sampleable = gdf[gdf["_stratum"].notna()]  # feições sem classe não são sorteadas, mas contam como referência
+    strata = params.strata or sorted(sampleable["_stratum"].unique().tolist())
     spacing = _Spacing((params.min_spacing_px or size_px) * res)
     out: list[ChipSpec] = []
 
@@ -121,7 +122,7 @@ def _sample_vector(path: str, params: SamplingParams, size_px: int, res: float) 
         return True
 
     for s in strata:
-        sub = gdf[gdf["_stratum"] == s]
+        sub = sampleable[sampleable["_stratum"] == s]
         if sub.empty:
             continue
         n_target = params.n_per_stratum
@@ -221,6 +222,51 @@ def sample_layer(path: str, params: SamplingParams, size_px: int, res: float) ->
     return _sample_vector(path, params, size_px, res)
 
 
+def samples_to_chips(path: str, stratum_field: str, class_field: str, size_px: int, res: float,
+                     strata: list[str] | None = None, class_map: dict[str, int] | None = None,
+                     skip: set[int] | None = None) -> list[ChipSpec]:
+    """Amostra estratificada fora do sistema: cada ponto ou polígono vira um chip centrado nele.
+
+    `class_map` liga valores do campo de classe às classes do projeto (pré-rotulagem).
+    `skip` são índices de feições que já viraram chip (para não duplicar ao gerar de novo).
+    A referência do chip guarda a própria amostra (recortada ao chip) e, em `sample`, o índice da
+    feição no arquivo, o estrato, a classe de referência e os atributos originais.
+    """
+    from .layers import norm_value, read_vector_raw
+
+    class_map = class_map or {}
+    skip = skip or set()
+    wanted = set(strata or [])
+    raw = read_vector_raw(path)
+    out: list[ChipSpec] = []
+    attrs = [c for c in raw.columns if c != "geometry"][:30]
+    for idx, row in raw.iterrows():
+        g = row.geometry
+        if g is None or g.is_empty or g.geom_type not in ("Point", "MultiPoint", "Polygon", "MultiPolygon"):
+            continue
+        st = norm_value(row[stratum_field])
+        if st is None or (wanted and st not in wanted) or int(idx) in skip:
+            continue
+        cv = norm_value(row[class_field]) if class_field else None
+        if not g.is_valid:
+            from shapely.validation import make_valid
+            g = make_valid(g)
+        c = g if g.geom_type == "Point" else g.representative_point()
+        grid = chip_grid(c.x, c.y, size_px, res)
+        local = reproject_geom(g, 4326, grid.epsg).intersection(box(grid.minx, grid.miny, grid.maxx, grid.maxy))
+        cid = class_map.get(cv) if cv is not None else None
+        feats = []
+        if not local.is_empty:
+            feats.append({"type": "Feature", "geometry": mapping(local),
+                          "properties": {"stratum": st, "class_value": cv, "class_id": cid, "sample": True}})
+        props = {k: norm_value(row[k]) for k in attrs}
+        ref = {"type": "FeatureCollection", "features": feats,
+               "sample": {"index": int(idx), "stratum": st, "class_value": cv, "class_id": cid,
+                          "geometry_type": g.geom_type, "attributes": props}}
+        out.append(ChipSpec(st, float(c.x), float(c.y), grid, ref))
+    return out
+
+
 def manual_chip(lon: float, lat: float, size_px: int, res: float, layer_path: str | None,
                 class_field: str = "", class_map: dict[str, int] | None = None) -> ChipSpec:
     """Chip criado por clique do usuário no mapa."""
@@ -239,7 +285,11 @@ def reference_to_pixels(reference: dict, grid: ChipGrid) -> dict:
     for f in reference.get("features", []):
         g = grid.to_pixel(shape(f["geometry"]))
         feats.append({"type": "Feature", "properties": f.get("properties", {}), "geometry": mapping(g)})
-    return {"type": "FeatureCollection", "features": feats}
+    out = {"type": "FeatureCollection", "features": feats}
+    if reference.get("sample"):
+        out["sample"] = reference["sample"]
+    return out
 
 
-__all__ = ["SamplingParams", "ChipSpec", "sample_layer", "manual_chip", "reference_to_pixels", "BACKGROUND"]
+__all__ = ["SamplingParams", "ChipSpec", "sample_layer", "samples_to_chips", "manual_chip", "reference_to_pixels",
+           "BACKGROUND"]

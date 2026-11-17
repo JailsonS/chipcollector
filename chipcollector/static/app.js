@@ -476,9 +476,11 @@ function onKey(e) {
 }
 
 async function openNext() {
+  const ticket = (A.nextTicket = (A.nextTicket || 0) + 1);  // só a última chamada vale (ex.: troca rápida de estrato)
   try {
     const st = $("#stratumSel")?.value || "";
     const r = await api(`/api/projects/${S.project.id}/next?stratum=${encodeURIComponent(st)}&exclude=${A.chipId || 0}`);
+    if (ticket !== A.nextTicket) return;
     if (!r.chip_id) {
       A.chipId = null;
       $("#chipmsg").classList.remove("hidden");
@@ -493,7 +495,9 @@ async function openNext() {
 
 async function openChip(id) {
   const p = S.project, seg = p.annotation_type === "segmentation";
+  const ticket = A.nextTicket;
   const c = await api(`/api/chips/${id}`);
+  if (ticket !== A.nextTicket) return;
   if (c.project_id !== p.id) throw new Error(t("Chip de outro projeto."));
   A.chip = c; A.chipId = c.id;
   const S0 = c.size_px;
@@ -501,6 +505,7 @@ async function openChip(id) {
   $("#chipTitle").textContent = `Chip #${c.id}`;
   $("#chipInfo").innerHTML = `${t("estrato {s}", { s: `<b translate="no">${esc(c.stratum)}</b>` })} · ${c.lat.toFixed(5)}, ${c.lon.toFixed(5)} · EPSG:${c.epsg}<br>
     ${c.size_px}×${c.size_px} px · ${c.resolution_m} m · ${t("{a}/{b} anotações", { a: c.n_annotations, b: c.annotators_per_chip })}
+    ${c.reference?.sample ? `<br>${sampleInfo(c.reference.sample)}` : ""}
     ${c.my_annotation ? `<br><span class="pill">${esc(t("já anotado por você ({s})", { s: t(statusLabel(c.my_annotation.status)) }))}</span>` : ""}`;
   // limpa camadas
   drawnLayers().forEach((l) => A.map.removeLayer(l));
@@ -509,7 +514,7 @@ async function openChip(id) {
   L.geoJSON(c.reference, {
     pmIgnore: true, interactive: false, coordsToLatLng: (xy) => toLL(xy[0], xy[1]),
     style: (f) => ({ color: classById(f.properties.class_id)?.color || "#ffd60a", weight: 1.5, dashArray: "4,4", fill: false }),
-    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 4 }),
+    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 9 }),  // amostra em ponto: anel visível no centro do chip
   }).addTo(A.refLayer);
   (c.other_annotations || []).forEach((o) => L.geoJSON(o.features, {
     pmIgnore: true, interactive: false, coordsToLatLng: (xy) => toLL(xy[0], xy[1]),
@@ -535,6 +540,13 @@ async function openChip(id) {
   setTimeout(() => A.ctx.invalidateSize(), 50);
   await loadImage();
   if ($("#cmpSel").value) loadCompare();
+}
+
+function sampleInfo(smp) {
+  const id = smp.attributes && (smp.attributes.id ?? smp.attributes.ID ?? smp.attributes.fid);
+  const parts = [esc(t("amostra {n}", { n: id ?? "#" + (smp.index + 1) }))];
+  if (smp.class_value) parts.push(esc(t("classe de referência: {c}", { c: smp.class_value })));
+  return `<span translate="no">${parts.join(" · ")}</span>`;
 }
 
 function fitChip() { if (A.bounds) A.map.fitBounds(A.bounds, { padding: [10, 10] }); }
@@ -709,33 +721,42 @@ async function renderSetup() {
       <div id="sources"></div>
       <div class="row"><button id="addSrc">+ base de imagem</button><button class="primary" id="saveSrc">Salvar bases</button></div>
     </div>
-    <div class="grid2">
-      <div class="card"><h2><span class="step-no">03 /</span>Camadas de referência</h2>
-        <p class="muted small">Vetor (GPKG, GeoJSON, SHP zipado, KML, FGB, Parquet) com um campo de classe para estratificar,
-        ou raster categórico (GeoTIFF, ex.: MapBiomas, PRODES).</p>
+    <div class="card"><h2><span class="step-no">03 /</span>Camadas de referência e amostras</h2>
+      <p class="muted small">${t("Envie a camada e depois diga o papel dela: {a} (o sistema estratifica e sorteia os chips) ou {b} (feita fora do sistema; cada ponto ou polígono vira um chip).",
+        { a: `<b>${t("referência para sortear")}</b>`, b: `<b>${t("amostra já estratificada")}</b>` })}</p>
+      <p class="muted small">Vetor (GPKG, GeoJSON, SHP zipado, KML, FGB, Parquet) ou raster categórico (GeoTIFF, ex.: MapBiomas, PRODES).</p>
+      <div class="inline-fields">
         <div class="field"><label>Arquivo(s)</label><input id="lyFiles" type="file" multiple></div>
-        <div class="inline-fields"><div class="field"><label>Nome</label><input id="lyName"></div>
-          <div class="field"><label>Tema</label><input id="lyTheme" placeholder="desmatamento, LULC…"></div>
-          <div class="field"><label>Campo de classe (vetor)</label><input id="lyField" placeholder="ex.: classe"></div></div>
-        <button class="primary" id="lyUp">Enviar camada</button>
-        <table style="margin-top:.8rem"><thead><tr><th>Camada</th><th>Estratos</th><th></th></tr></thead><tbody>
-        ${layers.map((l) => `<tr><td><b>${esc(l.name)}</b><br><span class="muted small">${esc(t("{theme} · {kind} · {n} feições", { theme: l.theme, kind: l.kind, n: l.n_features }))} ${l.class_field ? esc(t("· campo {f}", { f: l.class_field })) : ""}</span></td>
-          <td class="small">${Object.entries(l.strata).slice(0, 12).map(([k, v]) => `${esc(k)}: ${v}`).join("<br>")}</td>
-          <td><button class="ghost danger small" data-dl="${l.id}">✕</button></td></tr>`).join("")}</tbody></table>
+        <div class="field"><label>Nome</label><input id="lyName"></div>
+        <div class="field"><label>Tema</label><input id="lyTheme" placeholder="desmatamento, LULC…"></div>
       </div>
-      <div class="card"><h2>Rasters locais (opcional)</h2>
-        <p class="muted small">Envie mosaicos próprios (GeoTIFF/COG — ex.: Planet NICFI baixado, CBERS, drone) para usar como base de imagem.</p>
+      <button class="primary" id="lyUp">Enviar camada</button>
+      ${layers.length ? `<table style="margin-top:1rem"><thead><tr><th>Camada</th><th>Papel</th><th>Campos</th><th>Estratos</th><th>Chips</th><th></th></tr></thead><tbody>
+      ${layers.map((l) => `<tr><td><b translate="no">${esc(l.name)}</b><br><span class="muted small">${esc(t("{theme} · {kind} · {n} feições", { theme: l.theme, kind: l.kind, n: l.n_features }))}</span></td>
+        <td><span class="pill ${l.role === "samples" ? "" : "gray"}">${l.role === "samples" ? "amostra já estratificada" : "referência para sortear"}</span></td>
+        <td class="small">${layerFieldsText(l)}</td>
+        <td class="small" translate="no">${Object.entries(l.strata || {}).slice(0, 8).map(([k, v]) => `${esc(k)}: ${v}`).join("<br>")}${Object.keys(l.strata || {}).length > 8 ? "<br>…" : ""}</td>
+        <td>${l.n_chips}</td>
+        <td class="row" style="flex-wrap:nowrap">${l.kind === "vector" ? `<button class="small" data-cfg="${l.id}">Configurar</button>` : ""}<button class="ghost danger small" data-dl="${l.id}" aria-label="Remover camada">✕</button></td></tr>`).join("")}</tbody></table>` : ""}
+      <div id="layerCfg"></div>
+    </div>
+    <div class="card"><h2>Rasters locais (opcional)</h2>
+      <p class="muted small">Envie mosaicos próprios (GeoTIFF/COG — ex.: Planet NICFI baixado, CBERS, drone) para usar como base de imagem.</p>
+      <div class="inline-fields">
         <div class="field"><label>GeoTIFF</label><input id="rsFile" type="file" accept=".tif,.tiff"></div>
         <div class="field"><label>Nome</label><input id="rsName"></div>
-        <button class="primary" id="rsUp">Enviar raster</button>
-        <table style="margin-top:.8rem"><tbody>${rasters.map((r) => `<tr><td>#${r.id} <b>${esc(r.name)}</b><br>
-          <span class="muted small">${esc(t("{n} bandas ({names}) · {crs}", { n: r.count, names: r.band_names.join(", "), crs: r.crs }))}</span></td>
-          <td><button class="ghost danger small" data-dr="${r.id}">✕</button></td></tr>`).join("")}</tbody></table>
       </div>
+      <button class="primary" id="rsUp">Enviar raster</button>
+      ${rasters.length ? `<table style="margin-top:.8rem"><tbody>${rasters.map((r) => `<tr><td>#${r.id} <b>${esc(r.name)}</b><br>
+        <span class="muted small">${esc(t("{n} bandas ({names}) · {crs}", { n: r.count, names: r.band_names.join(", "), crs: r.crs }))}</span></td>
+        <td><button class="ghost danger small" data-dr="${r.id}">✕</button></td></tr>`).join("")}</tbody></table>` : ""}
     </div>
-    <div class="card"><h2><span class="step-no">04 /</span>Gerar chips (amostragem estratificada)</h2>
+    <div class="card"><h2><span class="step-no">04 /</span>Gerar chips</h2>
       <div class="inline-fields">
         <div class="field"><label>Camada</label><select id="gLayer">${layers.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join("")}</select></div>
+      </div>
+      <p id="gHow" class="muted small"></p>
+      <div class="inline-fields" id="gParams">
         <div class="field"><label>Chips por estrato</label><input id="gN" type="number" value="50" min="1"></div>
         <div class="field"><label>Chips de fundo (fora das feições)</label><input id="gBg" type="number" value="0" min="0"></div>
         <div class="field"><label>Espaçamento mín. (px)</label><input id="gSp" type="number" placeholder="${esc(t("{n} (sem sobreposição)", { n: p.chip_size_px }))}"></div>
@@ -782,11 +803,17 @@ async function renderSetup() {
     if (!files.length) return toast("Selecione o(s) arquivo(s).", true);
     const fd = new FormData();
     [...files].forEach((f) => fd.append("files", f));
-    fd.append("name", $("#lyName").value); fd.append("theme", $("#lyTheme").value); fd.append("class_field", $("#lyField").value);
+    fd.append("name", $("#lyName").value); fd.append("theme", $("#lyTheme").value);
     $("#lyUp").disabled = true;
-    try { const r = await api(`/api/projects/${p.id}/layers`, { method: "POST", body: fd }); toast(t("Camada enviada: {n} feições. Campos: {f}", { n: r.n_features, f: (r.fields || []).join(", ") })); route(); }
-    catch (e) { fail(e); } finally { $("#lyUp").disabled = false; }
+    try {
+      const r = await api(`/api/projects/${p.id}/layers`, { method: "POST", body: fd });
+      if (r.kind === "vector") { S.openLayerCfg = r.id; toast(t("Camada enviada. Agora diga o papel dela e os campos.")); }
+      else toast(t("Raster enviado."));
+      route();
+    } catch (e) { fail(e); } finally { $("#lyUp").disabled = false; }
   };
+  $$("[data-cfg]").forEach((b) => (b.onclick = () => openLayerConfig(layers.find((l) => l.id === Number(b.dataset.cfg)))));
+  if (S.openLayerCfg) { const l = layers.find((x) => x.id === S.openLayerCfg); S.openLayerCfg = null; if (l) openLayerConfig(l); }
   $$("[data-dl]").forEach((b) => (b.onclick = async () => { if (confirm(t("Remover camada?"))) { await api(`/api/layers/${b.dataset.dl}`, { method: "DELETE" }).catch(fail); route(); } }));
   $("#rsUp").onclick = async () => {
     const f = $("#rsFile").files[0];
@@ -798,28 +825,138 @@ async function renderSetup() {
   };
   $$("[data-dr]").forEach((b) => (b.onclick = async () => { if (confirm(t("Remover raster?"))) { await api(`/api/rasters/${b.dataset.dr}`, { method: "DELETE" }).catch(fail); route(); } }));
   // geração
+  const curLayer = () => layers.find((x) => x.id === Number($("#gLayer").value));
   const showStrata = () => {
-    const l = layers.find((x) => x.id === Number($("#gLayer").value));
-    if (!l) { $("#gStrata").innerHTML = '<p class="muted">Envie uma camada de referência primeiro.</p>'; return; }
-    $("#gStrata").innerHTML = `<table><thead><tr><th>Usar</th><th>Estrato</th><th>Feições/pixels</th><th>Classe do projeto (pré-rotulagem)</th></tr></thead><tbody>
-      ${Object.entries(l.strata).map(([k, v]) => `<tr><td><input type="checkbox" data-s="${esc(k)}" checked></td><td>${esc(k)}</td><td>${v}</td>
-      <td><select data-m="${esc(k)}"><option value="">—</option>${p.classes.map((c) => `<option value="${c.id}" ${c.name === k ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></td></tr>`).join("")}
-      </tbody></table>`;
+    const l = curLayer();
+    $("#gGo").disabled = !l;
+    if (!l) { $("#gStrata").innerHTML = '<p class="muted">Envie uma camada de referência primeiro.</p>'; $("#gHow").textContent = ""; return; }
+    const samples = l.role === "samples";
+    $("#gParams").classList.toggle("hidden", samples);
+    $("#gHow").innerHTML = samples
+      ? esc(t("Amostra já estratificada: cada ponto ou polígono vira um chip centrado nele. Amostras que já viraram chip não são repetidas."))
+      : esc(t("O sistema sorteia os chips dentro das feições de cada estrato."));
+    const classOpts = (sel) => `<option value="">—</option>${p.classes.map((c) => `<option value="${c.id}" ${c.name === sel ? "selected" : ""}>${esc(c.name)}</option>`).join("")}`;
+    const strataTable = `<table><thead><tr><th>Usar</th><th>Estrato</th><th>${samples ? "Amostras" : "Feições/pixels"}</th>${samples ? "" : "<th>Classe do projeto (pré-rotulagem)</th>"}</tr></thead><tbody>
+      ${Object.entries(l.strata || {}).map(([k, v]) => `<tr><td><input type="checkbox" data-s="${esc(k)}" checked></td><td translate="no">${esc(k)}</td><td>${v}</td>
+      ${samples ? "" : `<td><select data-m="${esc(k)}">${classOpts(k)}</select></td>`}</tr>`).join("")}</tbody></table>`;
+    if (!samples) { $("#gStrata").innerHTML = strataTable; return; }
+    $("#gStrata").innerHTML = strataTable + (l.class_field ? `<div id="gClassMap" class="muted small" style="margin-top:.6rem">${esc(t("Carregando…"))}</div>` : "");
+    if (l.class_field) api(`/api/layers/${l.id}/check`, { method: "POST", body: { role: "samples", stratum_field: l.stratum_field, class_field: l.class_field } })
+      .then((rep) => {
+        const box = $("#gClassMap"); if (!box) return;
+        box.classList.remove("muted", "small");
+        box.innerHTML = `<h3 style="margin-top:.6rem">${esc(t("Classe de referência → classe do projeto (pré-rotulagem)"))}</h3>
+          <table><thead><tr><th>${esc(t("Classe no arquivo ({f})", { f: l.class_field }))}</th><th>Amostras</th><th>Classe do projeto (pré-rotulagem)</th></tr></thead><tbody>
+          ${Object.entries(rep.by_class || {}).map(([k, v]) => `<tr><td translate="no">${esc(k)}</td><td>${v}</td><td><select data-m="${esc(k)}">${classOpts(k)}</select></td></tr>`).join("")}</tbody></table>`;
+      }).catch(fail);
   };
   $("#gLayer").onchange = showStrata; showStrata();
   $("#gGo").onclick = async () => {
+    const l = curLayer();
     const strata = $$("[data-s]").filter((c) => c.checked).map((c) => c.dataset.s);
     const class_map = {}; $$("[data-m]").forEach((s) => s.value && (class_map[s.dataset.m] = Number(s.value)));
     $("#gGo").disabled = true; $("#gGo").textContent = t("Gerando…");
     try {
       const r = await api(`/api/projects/${p.id}/chips/generate`, { method: "POST", body: {
-        layer_id: Number($("#gLayer").value), n_per_stratum: Number($("#gN").value), n_background: Number($("#gBg").value),
+        layer_id: l.id, n_per_stratum: Number($("#gN").value), n_background: Number($("#gBg").value),
         min_spacing_px: $("#gSp").value ? Number($("#gSp").value) : null, placement: $("#gPl").value, seed: Number($("#gSeed").value), strata, class_map } });
-      toast(t("{n} chips criados.", { n: r.created })); route();
+      toast(r.role === "samples" && r.already_in_chips
+        ? t("{n} chips criados ({m} amostras já tinham chip).", { n: r.created, m: r.already_in_chips })
+        : t("{n} chips criados.", { n: r.created }));
+      route();
     } catch (e) { fail(e); } finally { $("#gGo").disabled = false; $("#gGo").textContent = t("Gerar chips"); }
   };
   $("#gDel").onclick = async () => { if (!confirm(t("Apagar todos os chips ainda não anotados?"))) return; const r = await api(`/api/projects/${p.id}/chips`, { method: "DELETE" }).catch(fail); r && toast(t("{n} chips removidos.", { n: r.deleted })); route(); };
   $("#delProj").onclick = async () => { if (prompt(t("Digite o nome do projeto para excluir: {name}", { name: p.name })) !== p.name) return; await api(`/api/projects/${p.id}`, { method: "DELETE" }).catch(fail); location.hash = "#/"; };
+}
+
+function layerFieldsText(l) {
+  if (l.kind === "raster") return esc(t("valores do raster"));
+  if (l.role === "samples") {
+    return [l.stratum_field ? esc(t("estrato: {f}", { f: l.stratum_field })) : `<span style="color:var(--danger)">${esc(t("estrato não definido"))}</span>`,
+      l.class_field ? esc(t("classe: {f}", { f: l.class_field })) : esc(t("sem classe de referência"))].join("<br>");
+  }
+  return l.class_field ? esc(t("classe: {f}", { f: l.class_field })) : `<span class="muted">${esc(t("sem campo (estrato único)"))}</span>`;
+}
+
+async function openLayerConfig(l) {
+  const box = $("#layerCfg");
+  box.innerHTML = `<div class="card tight layer-cfg"><p class="muted">${esc(t("Carregando…"))}</p></div>`;
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  let info;
+  try { info = await api(`/api/layers/${l.id}/fields`); } catch (e) { box.innerHTML = ""; return fail(e); }
+  const sug = info.suggestion || {};
+  const firstTime = l.role === "reference" && !l.class_field && !l.stratum_field;
+  const st = { role: firstTime ? sug.role : l.role,
+    stratum: (firstTime ? sug.stratum_field : l.stratum_field) || "",
+    klass: (firstTime ? (sug.role === "samples" ? sug.class_field : sug.class_field) : l.class_field) || "" };
+  const fieldOpts = (sel, allowEmpty) => (allowEmpty ? `<option value="">${esc(t("— nenhum —"))}</option>` : `<option value="">${esc(t("— escolha —"))}</option>`) +
+    info.field_info.map((f) => `<option value="${esc(f.name)}" ${f.name === sel ? "selected" : ""}>${esc(f.name)}</option>`).join("");
+  const preview = (name) => {
+    const f = info.field_info.find((x) => x.name === name);
+    if (!f) return "";
+    return esc(t("{n} valores · ex.: {ex}", { n: f.n_unique, ex: f.examples.join(", ") })) + (f.n_empty ? " · " + esc(t("{n} vazios", { n: f.n_empty })) : "");
+  };
+  const draw = () => {
+    box.innerHTML = `<div class="card tight layer-cfg stack">
+      <div class="row"><h3 style="margin:0">${esc(t("Configurar camada"))}: <span translate="no">${esc(l.name)}</span></h3><div class="spacer"></div>
+        <button class="ghost small" id="cfgClose">${esc(t("Fechar"))}</button></div>
+      <p class="muted small">${esc(t("{n} feições · geometrias: {g}", { n: info.n_features, g: info.geom_types.join(", ") }))}</p>
+      ${firstTime && sug.reasons?.length ? `<p class="hint small">${esc(t("Sugestão: parece uma amostra já estratificada ({why}). Confira abaixo.", { why: sug.reasons.join("; ") }))}</p>` : ""}
+      <div class="roles">
+        <label class="role ${st.role === "samples" ? "on" : ""}"><input type="radio" name="role" value="samples" ${st.role === "samples" ? "checked" : ""}>
+          <span><b>Amostra já estratificada</b><br><span class="muted small">Feita fora do sistema. Cada ponto ou polígono vira um chip centrado nele.</span></span></label>
+        <label class="role ${st.role === "reference" ? "on" : ""}"><input type="radio" name="role" value="reference" ${st.role === "reference" ? "checked" : ""}>
+          <span><b>Referência para sortear</b><br><span class="muted small">O sistema estratifica pelas classes e sorteia os chips dentro das feições.</span></span></label>
+      </div>
+      ${st.role === "samples" ? `<div class="inline-fields">
+        <div class="field"><label>Campo do estrato</label><select id="cfgStratum">${fieldOpts(st.stratum, false)}</select><div class="muted small" id="pvStratum">${preview(st.stratum)}</div></div>
+        <div class="field"><label>Campo da classe de referência</label><select id="cfgClass">${fieldOpts(st.klass, true)}</select><div class="muted small" id="pvClass">${preview(st.klass)}</div></div>
+      </div>` : `<div class="inline-fields">
+        <div class="field"><label>Campo de classe (estratos)</label><select id="cfgClass">${fieldOpts(st.klass, true)}</select><div class="muted small" id="pvClass">${preview(st.klass)}</div></div>
+      </div>`}
+      <div class="row"><button id="cfgCheck">${esc(t("Verificar"))}</button><button class="primary" id="cfgSave">${esc(t("Salvar configuração"))}</button></div>
+      <div id="cfgReport"></div>
+    </div>`;
+    $$('input[name=role]', box).forEach((r) => (r.onchange = () => { st.role = r.value; draw(); }));
+    const sSel = $("#cfgStratum"), cSel = $("#cfgClass");
+    if (sSel) sSel.onchange = () => { st.stratum = sSel.value; $("#pvStratum").innerHTML = preview(st.stratum); $("#cfgReport").innerHTML = ""; };
+    if (cSel) cSel.onchange = () => { st.klass = cSel.value; $("#pvClass").innerHTML = preview(st.klass); $("#cfgReport").innerHTML = ""; };
+    $("#cfgClose").onclick = () => (box.innerHTML = "");
+    const body = () => ({ role: st.role, stratum_field: st.role === "samples" ? st.stratum : "", class_field: st.klass });
+    $("#cfgCheck").onclick = async () => {
+      try { renderCheck(await api(`/api/layers/${l.id}/check`, { method: "POST", body: body() }), st.role); } catch (e) { fail(e); }
+    };
+    $("#cfgSave").onclick = async () => {
+      try {
+        const rep = await api(`/api/layers/${l.id}/check`, { method: "POST", body: body() });
+        renderCheck(rep, st.role);
+        if (!rep.ok) return;
+        await api(`/api/layers/${l.id}`, { method: "PATCH", body: body() });
+        toast(t("Configuração salva."));
+        route();
+      } catch (e) { fail(e); }
+    };
+  };
+  draw();
+  if (firstTime && sug.role === "samples" && sug.stratum_field) $("#cfgCheck").click();
+}
+
+function renderCheck(rep, role) {
+  const list = (arr, cls) => arr.length ? `<ul class="${cls}">${arr.map((x) => `<li>${esc(tr(x))}</li>`).join("")}</ul>` : "";
+  const head = rep.ok
+    ? `<p class="check-ok">${esc(role === "samples" ? t("Pronto para gerar: {n} amostras utilizáveis.", { n: rep.n_usable }) : t("Configuração válida."))}</p>`
+    : `<p class="check-err">${esc(t("Corrija antes de salvar:"))}</p>`;
+  let table = "";
+  if (rep.ok && role === "samples") {
+    const classes = [...new Set(Object.values(rep.crosstab || {}).flatMap((r) => Object.keys(r)))].sort();
+    table = `<p class="muted small">${esc(t("{p} pontos · {g} polígonos · {d} duplicadas · {o} próximas demais (chips de {m} m)", { p: rep.n_points, g: rep.n_polygons, d: rep.duplicates, o: rep.overlapping, m: rep.chip_side_m }))}</p>
+      <table translate="no"><thead><tr><th>${esc(t("Estrato"))}</th><th>${esc(t("Amostras"))}</th>${classes.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>
+      ${Object.entries(rep.by_stratum).map(([k, v]) => `<tr><td>${esc(k)}</td><td><b>${v}</b></td>${classes.map((c) => `<td>${(rep.crosstab?.[k] || {})[c] || ""}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  } else if (rep.ok) {
+    table = `<table translate="no"><tbody>${Object.entries(rep.by_stratum).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")}</tbody></table>`;
+  }
+  $("#cfgReport").innerHTML = `<div class="check">${head}${list(rep.errors || [], "check-errors")}${list(rep.warnings || [], "check-warnings")}${table}</div>`;
 }
 
 function sourceRow(s) {

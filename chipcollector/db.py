@@ -51,7 +51,13 @@ class ReferenceLayer(SQLModel, table=True):
     theme: str = ""
     kind: str = "vector"  # vector | raster
     path: str
-    class_field: str = ""  # campo do vetor usado para estratificar
+    # Papel da camada:
+    #   reference — o sistema sorteia chips dentro das feições, estratificando por `class_field`
+    #   samples   — amostra já estratificada fora do sistema: cada feição (ponto ou polígono) vira um chip;
+    #               `stratum_field` traz o estrato do desenho amostral e `class_field` a classe de referência
+    role: str = "reference"
+    stratum_field: str = ""
+    class_field: str = ""
     crs: str = ""
     n_features: int = 0
     # valores de estrato encontrados e sua contagem
@@ -151,7 +157,43 @@ def get_engine():
                 cur.execute("PRAGMA foreign_keys=ON")
                 cur.close()
         SQLModel.metadata.create_all(_engine)
+        add_missing_columns(_engine)
     return _engine
+
+
+def add_missing_columns(engine) -> list[str]:
+    """Atualização simples de esquema: acrescenta às tabelas existentes as colunas novas dos modelos.
+
+    `create_all` só cria tabelas que faltam; isto cobre colunas adicionadas em versões novas, para que um
+    banco criado por uma versão anterior continue funcionando. Não remove nem altera colunas.
+    """
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    added = []
+    with engine.begin() as conn:
+        for table in SQLModel.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            existing = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in existing or col.primary_key:
+                    continue
+                ddl_type = col.type.compile(dialect=engine.dialect)
+                default = ""
+                arg = getattr(col.default, "arg", None) if col.default is not None else None
+                if isinstance(arg, bool):
+                    default = f" DEFAULT {'1' if arg else '0'}" if engine.dialect.name == "sqlite" else f" DEFAULT {str(arg).upper()}"
+                elif isinstance(arg, (int, float)):
+                    default = f" DEFAULT {arg}"
+                elif isinstance(arg, str):
+                    default = " DEFAULT '" + arg.replace("'", "''") + "'"
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl_type}{default}'))
+                added.append(f"{table.name}.{col.name}")
+    if added:
+        import logging
+        logging.getLogger("chipcollector").info("Colunas adicionadas ao banco: %s", ", ".join(added))
+    return added
 
 
 def reset_engine() -> None:
