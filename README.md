@@ -1,32 +1,32 @@
 # ChipCollector
 
-Plataforma web, multiusuário e 100% open source (Python) para **coleta de amostras de referência
-(chips) destinadas ao treinamento de modelos de IA** em sensoriamento remoto. O alvo de detecção
-é flexível (extração madeireira, desmatamento, uso e cobertura da terra…) e as duas abordagens mais
-comuns são suportadas: **classificação** (rótulo por chip) e **segmentação** (polígonos por chip).
+A multi-user, 100% open-source (Python) web platform for **collecting reference samples (chips)
+for training AI models** in remote sensing. The detection target is flexible (selective logging,
+deforestation, land use and land cover…) and both common approaches are supported:
+**classification** (one label per chip) and **segmentation** (polygons per chip).
 
-![fluxo](docs/fluxo.svg)
+![workflow](docs/fluxo.svg)
 
-| Segmentação | Classificação |
+| Segmentation | Classification |
 |---|---|
 | ![](docs/anotacao_segmentacao.png) | ![](docs/anotacao_classificacao.png) |
 
-> **Passo a passo de cada funcionalidade:** veja o [Guia de uso](docs/GUIA.md) — configurar um projeto, coletar, validar e exportar.
+> **Step-by-step for every feature:** see the [User guide](docs/GUIDE.md) — setting up a project, collecting, validating and exporting.
 
-## Funcionalidades × requisitos da proposta
+## Features × proposal requirements
 
-| Requisito | Como foi atendido |
+| Requirement | How it is met |
 |---|---|
-| **1. Acesso multiusuário** | Contas com login (senha PBKDF2, sessão por cookie assinado), papéis *administrador* / *anotador*. Cada anotação grava o autor e data. Fila de chips com **reserva** (lock) para evitar que dois usuários anotem o mesmo chip ao mesmo tempo; opção de *N anotadores por chip* para medir concordância. Painel de progresso por usuário. |
-| **2. Ambiente web** | Servidor FastAPI + interface no navegador (Leaflet + Leaflet‑Geoman, empacotados localmente). Roda em servidor ou no próprio computador (`chipcollector serve`), com ou sem Docker. |
-| **3. Dados de referência** | Upload de camadas **vetoriais** (GPKG, GeoJSON, Shapefile zipado, KML, FlatGeobuf, GeoParquet) ou **matriciais** categóricas (GeoTIFF, ex.: MapBiomas, PRODES). Cada camada tem um papel: **amostra já estratificada** fora do sistema (pontos e/ou polígonos; o admin indica o campo do estrato e o da classe de referência, e cada feição vira um chip) ou **referência para sortear** (o sistema estratifica pelas classes e sorteia os chips). Uma verificação confere campos, geometrias, amostras sem estrato, duplicadas e sobrepostas antes de gerar. |
-| **4a. Tamanho do chip** | Definido por projeto (pixels) + resolução (m/pixel). Grade alinhada em UTM local. |
-| **4b. Número de classes** | Classe única (presença/ausência) ou múltiplas classes, com opção de uma ou várias classes por chip. |
-| **4c. Diferentes bases de imagem** | Cada projeto tem várias “bases” (sensor + período + nuvens + composição). Sensores: **Sentinel‑2, Landsat 8/9, Landsat 5/7, Sentinel‑1** (Planetary Computer, gratuito), Sentinel‑2 (Earth Search/AWS, gratuito), **Google Earth Engine** (gratuito p/ ONGs: S2, Landsat, S1, **Planet NICFI**, qualquer coleção) e **rasters locais**. Troca de base, composição RGB, contraste e comparação com transparência durante a anotação. |
-| **4d. Tipo de anotação** | **Segmentação:** desenhar, editar, recortar e apagar polígonos; botão *Usar referência* copia os polígonos da camada de referência para **refinamento**. **Classificação:** rótulo binário presença/ausência (ou multiclasse) por atalho de teclado. Status *incerto* e *pular*. |
-| **5. Exportação** | Pacote .zip com GeoTIFF multibanda por chip/base, máscaras GeoTIFF, **COCO JSON**, `labels.csv`, GeoJSON, divisão treino/val/teste e metadados com autoria. Download local e envio ao **Google Drive** (OAuth por usuário ou conta de serviço). Também por linha de comando. |
+| **1. Multi-user access** | Accounts with login (PBKDF2 passwords, signed-cookie sessions), *administrator* / *annotator* roles. Every annotation records its author and date. Chip queue with **reservation** (lock) so two users never annotate the same chip at the same time; optional *N annotators per chip* to measure agreement. Per-user progress dashboard. |
+| **2. Web environment** | FastAPI server + browser interface (Leaflet + Leaflet‑Geoman, bundled locally). Runs on a server or on your own computer (`chipcollector serve`), with or without Docker. |
+| **3. Reference data** | Upload **vector** layers (GPKG, GeoJSON, zipped Shapefile, KML, FlatGeobuf, GeoParquet) or categorical **raster** layers (GeoTIFF, e.g. MapBiomas, PRODES). Each layer has a role: **pre-stratified sample** made outside the system (points and/or polygons; the admin picks the stratum field and the reference class field, and each feature becomes a chip) or **reference to sample from** (the system stratifies by class and draws the chips). A check validates fields, geometries, samples without a stratum, duplicates and overlaps before generating. |
+| **4a. Chip size** | Set per project (pixels) + resolution (m/pixel). Grid aligned to the local UTM zone. |
+| **4b. Number of classes** | Single class (presence/absence) or multiple classes, with one or several classes per chip. |
+| **4c. Different imagery sources** | Each project has several “imagery sources” (sensor + period + clouds + composite). Sensors: **Sentinel‑2, Landsat 8/9, Landsat 5/7, Sentinel‑1** (Planetary Computer, free), Sentinel‑2 (Earth Search/AWS, free), **Google Earth Engine** (free for NGOs: S2, Landsat, S1, **Planet NICFI**, any collection) and **local rasters**. Switch source, RGB composite, stretch and compare with transparency while annotating. |
+| **4d. Annotation type** | **Segmentation:** draw, edit, cut and delete polygons; the *Use reference* button copies the polygons from the reference layer for **refinement**. **Classification:** binary presence/absence (or multiclass) label via keyboard shortcut. *Unsure* and *Skip* statuses. |
+| **5. Export** | .zip package with a multiband GeoTIFF per chip/source, GeoTIFF masks, **COCO JSON**, `labels.csv`, GeoJSON, train/val/test split and metadata with authorship. Local download and upload to **Google Drive** (per-user OAuth or service account). Also available from the command line. |
 
-## Início rápido (local, sem internet de imagens)
+## Quick start (local, no imagery download needed)
 
 ```bash
 git clone https://github.com/JailsonS/chipcollector.git
@@ -34,208 +34,208 @@ cd chipcollector
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e ".[all]"
 
-# dados sintéticos + usuário admin/admin123 + 2 projetos de demonstração
+# synthetic data + admin/admin123 user + 2 demo projects
 chipcollector demo --seed
 
-chipcollector serve          # abra http://localhost:8000
+chipcollector serve          # open http://localhost:8000
 ```
 
-**Primeiro acesso:**
-- com `chipcollector demo --seed`, entre com usuário `admin` e senha `admin123`;
-- sem `--seed`, a tela abre em *Criar conta*: a primeira conta criada vira administradora.
+**First login:**
+- with `chipcollector demo --seed`, log in with username `admin` and password `admin123`;
+- without `--seed`, the screen opens on *Create account*: the first account created becomes the administrator.
 
-A senha aparece oculta ao digitar; use o botão *Mostrar* no campo para conferir.
-Para criar um usuário pelo terminal: `chipcollector create-user nome --password "senha" --admin`.
+The password is hidden while you type; use the *Show* button in the field to check it.
+To create a user from the terminal: `chipcollector create-user name --password "password" --admin`.
 
-### Versão de teste online, sem servidor
+### Online test version, no server needed
 
-Para que outras pessoas testem pela internet sem pagar hospedagem, rode a aplicação no seu
-computador e publique um endereço temporário com o Cloudflare Quick Tunnel (gratuito, sem conta):
+To let other people test it over the internet without paying for hosting, run the app on your
+computer and publish a temporary address with Cloudflare Quick Tunnel (free, no account):
 
 ```bash
-# 1. instale o cloudflared (uma vez)
+# 1. install cloudflared (once)
 brew install cloudflared                          # macOS
 winget install --id Cloudflare.cloudflared         # Windows
 # Linux: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/
 
-# 2. troque a senha de demonstração, se usou --seed
+# 2. change the demo password, if you used --seed
 chipcollector set-password admin
 
-# 3. publique
+# 3. publish
 chipcollector share
 ```
 
-O comando mostra um endereço `https://….trycloudflare.com` para enviar à equipe. Enquanto o túnel
-estiver aberto, o cadastro público fica desligado: crie as contas em **Usuários**.
+The command prints an `https://….trycloudflare.com` address to send to your team. While the
+tunnel is open, public sign-up is turned off: create accounts under **Users**.
 
-Limites: o endereço muda a cada execução e só funciona com o computador ligado e o comando
-rodando; arquivos acima de 100 MB não passam pelo túnel (envie-os pelo endereço local,
-`http://localhost:8000`); e o login com Google Drive não funciona nesse endereço temporário.
-O passo a passo está no [Guia](docs/GUIA.md#18-publicar-uma-versão-de-teste).
+Limits: the address changes on every run and only works while the computer is on and the command
+is running; files over 100 MB do not pass through the tunnel (upload them via the local address,
+`http://localhost:8000`); and Google Drive login does not work on the temporary address.
+The step-by-step is in the [Guide](docs/GUIDE.md#18-publish-a-test-version).
 
 ### Docker
 
 ```bash
-cp .env.example .env         # ajuste se necessário
+cp .env.example .env         # adjust if needed
 docker compose up --build    # http://localhost:8000
-docker compose exec app chipcollector create-user maria --password "senha123"
+docker compose exec app chipcollector create-user maria --password "password123"
 ```
 
-> Requisitos sem Docker: Python ≥ 3.10. As rodas (wheels) de `rasterio`, `pyogrio` e `pyproj`
-> já trazem GDAL/PROJ embutidos — não é preciso instalar GDAL no sistema.
+> Requirements without Docker: Python ≥ 3.10. The `rasterio`, `pyogrio` and `pyproj` wheels
+> already bundle GDAL/PROJ — there is no need to install GDAL on the system.
 
-## Fluxo de uso
+## Workflow
 
-1. **Criar projeto** (admin): nome, alvo, tipo de anotação, classes, tamanho do chip, resolução,
-   anotadores por chip.
-2. **Configurar → Bases de imagem**: adicione uma ou mais bases (ex.: *Sentinel‑2 seca 2024*,
-   *Landsat 2015*, *NICFI 2023‑06*). Todas são reamostradas para a grade do chip, então uma
-   anotação feita sobre um sensor vale para os demais.
-3. **Configurar → Camadas de referência e amostras**: envie a camada e diga o papel dela.
-   - *Amostra já estratificada* (desenho amostral feito fora do sistema): escolha o campo do estrato
-     e, se houver, o da classe de referência. Clique em **Verificar** para conferir o arquivo.
-   - *Referência para sortear*: escolha o campo de classe, que define os estratos.
-4. **Configurar → Gerar chips**:
-   - amostra pronta: cada ponto ou polígono vira um chip; gerar de novo não duplica;
-   - referência: escolha quantidade por estrato, chips de *fundo* (negativos, fora das feições),
-     espaçamento mínimo e posição.
-   Nos dois casos, ligue as classes do arquivo às classes do projeto (pré-rotulagem, que aparece
-   como referência tracejada). Chips também podem ser criados com um clique na aba **Mapa**.
-5. **Anotar**: cada usuário recebe o próximo chip livre da fila (filtrável por estrato).
-6. **Exportar**: escolha bases, status, divisão treino/val/teste e destino.
+1. **Create project** (admin): name, target, annotation type, classes, chip size, resolution,
+   annotators per chip.
+2. **Set up → Imagery**: add one or more imagery sources (e.g. *Sentinel‑2 dry season 2024*,
+   *Landsat 2015*, *NICFI 2023‑06*). All of them are resampled to the chip grid, so an annotation
+   made on one sensor holds for the others.
+3. **Set up → Reference layers and samples**: upload the layer and set its role.
+   - *Pre-stratified sample* (sampling design done outside the system): choose the stratum field
+     and, if there is one, the reference class field. Click **Check** to validate the file.
+   - *Reference to sample from*: choose the class field, which defines the strata.
+4. **Set up → Generate chips**:
+   - ready-made sample: each point or polygon becomes a chip; generating again does not duplicate;
+   - reference: choose the number per stratum, *background* chips (negatives, outside the
+     features), minimum spacing and placement.
+   In both cases, map the file's classes to the project classes (pre-labelling, shown as a dashed
+   reference). Chips can also be created with a single click on the **Map** tab.
+5. **Annotate**: each user gets the next free chip in the queue (filterable by stratum).
+6. **Export**: choose imagery sources, status, train/val/test split and destination.
 
-### Idioma
+### Language
 
-A interface está em **português e inglês**: use o seletor **PT | EN** no canto superior direito.
-A escolha fica salva no navegador; no primeiro acesso, vale o idioma do navegador. As traduções
-ficam em `chipcollector/static/i18n.js` (um dicionário por idioma); para incluir outro idioma,
-adicione um dicionário e um botão em `LANGS`.
+The interface is available in **Portuguese and English**: use the **PT | EN** switch in the top
+right corner. The choice is saved in the browser; on first visit, the browser's language is used.
+Translations live in `chipcollector/static/i18n.js` (one dictionary per language); to add another
+language, add a dictionary and a button in `LANGS`.
 
-### Atalhos de teclado (aba Anotar)
+### Keyboard shortcuts (Annotate tab)
 
-| Tecla | Ação |
+| Key | Action |
 |---|---|
-| `1`–`9` | escolher classe (classificação: marca o rótulo; segmentação: classe do próximo polígono) |
-| `0` | ausência do alvo |
-| `Enter` | salvar e ir para o próximo |
-| `U` / `S` | salvar como incerto / pular |
-| `B` | alternar base de imagem |
-| `R` | mostrar/ocultar referência |
-| `P` / `E` / `Del` / `Esc` | polígono / editar / apagar / sair da ferramenta |
+| `1`–`9` | pick a class (classification: sets the label; segmentation: class of the next polygon) |
+| `0` | target absent |
+| `Enter` | save and go to the next chip |
+| `U` / `S` | save as unsure / skip |
+| `B` | switch imagery source |
+| `R` | show/hide reference |
+| `P` / `E` / `Del` / `Esc` | polygon / edit / delete / exit the tool |
 
-## Fontes de imagem
+## Imagery sources
 
-| Provedor | Acesso | Sensores |
+| Provider | Access | Sensors |
 |---|---|---|
-| Microsoft Planetary Computer | gratuito, sem conta (URLs assinadas automaticamente) | Sentinel‑2 L2A, Landsat 8/9 e 5/7 C2 L2, Sentinel‑1 RTC |
-| Element84 Earth Search (AWS Open Data) | gratuito, sem conta | Sentinel‑2 L2A |
-| Google Earth Engine | gratuito para ONGs, pesquisa e uso não comercial | Sentinel‑2 SR, Landsat 8/9 e 5/7, Sentinel‑1 GRD, Planet NICFI, coleção personalizada |
-| Raster local | upload de GeoTIFF/COG | qualquer (drone, CBERS, NICFI baixado…) |
+| Microsoft Planetary Computer | free, no account (URLs signed automatically) | Sentinel‑2 L2A, Landsat 8/9 and 5/7 C2 L2, Sentinel‑1 RTC |
+| Element84 Earth Search (AWS Open Data) | free, no account | Sentinel‑2 L2A |
+| Google Earth Engine | free for NGOs, research and non-commercial use | Sentinel‑2 SR, Landsat 8/9 and 5/7, Sentinel‑1 GRD, Planet NICFI, custom collection |
+| Local raster | GeoTIFF/COG upload | any (drone, CBERS, downloaded NICFI…) |
 
-Nuvens são removidas por pixel (SCL no Sentinel‑2, QA_PIXEL no Landsat) e as cenas do período
-são compostas por **mediana** ou pela **cena menos nublada** (lacunas preenchidas pelas seguintes).
-As imagens de cada chip são baixadas sob demanda (lendo só a janela necessária dos COGs) e
-guardadas em cache em `data/chips/`.
+Clouds are masked per pixel (SCL for Sentinel‑2, QA_PIXEL for Landsat) and the scenes in the
+period are composited by **median** or by **least cloudy scene** (gaps filled by the next ones).
+Each chip's imagery is downloaded on demand (reading only the required window of the COGs) and
+cached in `data/chips/`.
 
-### Configurar o Google Earth Engine
+### Setting up Google Earth Engine
 
-1. Cadastre um projeto Cloud no Earth Engine (uso não comercial é gratuito):
+1. Register a Cloud project with Earth Engine (non-commercial use is free):
    <https://code.earthengine.google.com/register>.
-2. Escolha **uma** forma de autenticar:
-   - conta de serviço: crie a chave JSON e defina `CHIPS_GEE_SERVICE_ACCOUNT` e `CHIPS_GEE_KEY_FILE`;
-   - ou credencial de usuário: rode `earthengine authenticate` uma vez na máquina do servidor.
-3. Defina `CHIPS_GEE_PROJECT=<id-do-projeto>`.
-4. Para **Planet NICFI** (trópicos, 4,77 m, mensal), solicite acesso gratuito em
-   <https://www.planet.com/nicfi/> com a mesma conta e use a base *GEE → Planet NICFI*
-   (coleção padrão `projects/planet-nicfi/assets/basemaps/americas`).
+2. Choose **one** way to authenticate:
+   - service account: create the JSON key and set `CHIPS_GEE_SERVICE_ACCOUNT` and `CHIPS_GEE_KEY_FILE`;
+   - or user credentials: run `earthengine authenticate` once on the server machine.
+3. Set `CHIPS_GEE_PROJECT=<project-id>`.
+4. For **Planet NICFI** (tropics, 4.77 m, monthly), request free access at
+   <https://www.planet.com/nicfi/> with the same account and use the *GEE → Planet NICFI* source
+   (default collection `projects/planet-nicfi/assets/basemaps/americas`).
 
-### Configurar o Google Drive
+### Setting up Google Drive
 
-**OAuth por usuário (recomendado)** — cada pessoa envia para o próprio Drive:
+**Per-user OAuth (recommended)** — each person uploads to their own Drive:
 
-1. Google Cloud Console → *APIs e serviços* → ative a **Google Drive API**.
-2. Crie credenciais *ID do cliente OAuth* do tipo **Aplicativo da Web**, com URI de redirecionamento
-   `{CHIPS_PUBLIC_URL}/api/drive/callback` (ex.: `http://localhost:8000/api/drive/callback`).
-3. Baixe o JSON e defina `CHIPS_DRIVE_CLIENT_SECRETS=/caminho/client.json`.
-4. Na aba **Exportar**, clique em *Conectar meu Google Drive*. O escopo é `drive.file`: o app só
-   enxerga os arquivos que ele mesmo cria (pasta `ChipCollector`).
+1. Google Cloud Console → *APIs & Services* → enable the **Google Drive API**.
+2. Create *OAuth client ID* credentials of type **Web application**, with the redirect URI
+   `{CHIPS_PUBLIC_URL}/api/drive/callback` (e.g. `http://localhost:8000/api/drive/callback`).
+3. Download the JSON and set `CHIPS_DRIVE_CLIENT_SECRETS=/path/client.json`.
+4. On the **Export** tab, click *Connect my Google Drive*. The scope is `drive.file`: the app only
+   sees the files it creates itself (`ChipCollector` folder).
 
-**Conta de serviço** — para enviar tudo a um **Drive compartilhado** da organização: defina
-`CHIPS_DRIVE_SERVICE_ACCOUNT` (JSON) e `CHIPS_DRIVE_FOLDER_ID` (pasta dentro do Drive
-compartilhado, com a conta de serviço como membro). Também usado por `chipcollector export --drive`.
+**Service account** — to send everything to an organisation **shared Drive**: set
+`CHIPS_DRIVE_SERVICE_ACCOUNT` (JSON) and `CHIPS_DRIVE_FOLDER_ID` (a folder inside the shared
+Drive, with the service account as a member). Also used by `chipcollector export --drive`.
 
-## Formato da exportação
+## Export format
 
 ```
-<projeto>_<data>.zip
-└── <projeto>_<data>/
-    ├── metadata.json            projeto, classes, bases, contagens por split/anotador/rótulo
-    ├── labels.csv               1 linha por anotação (chip, autor, status, rótulos, one-hot, split, caminhos)
-    ├── chips.geojson            contornos dos chips (WGS84) com rótulo e autoria
-    ├── annotations.geojson      polígonos anotados (WGS84)                      [segmentação]
-    ├── images/<base>/chip_000123.tif   float32 multibanda (reflectância / dB), CRS UTM
-    ├── masks/chip_000123__<usuario>.tif uint8: 0 = fundo, n = id da classe      [segmentação]
-    └── coco/<base>.json         COCO (polígonos em pixels) apontando para images/<base>/  [segmentação]
+<project>_<date>.zip
+└── <project>_<date>/
+    ├── metadata.json            project, classes, sources, counts per split/annotator/label
+    ├── labels.csv               1 row per annotation (chip, author, status, labels, one-hot, split, paths)
+    ├── chips.geojson            chip outlines (WGS84) with label and authorship
+    ├── annotations.geojson      annotated polygons (WGS84)                      [segmentation]
+    ├── images/<source>/chip_000123.tif   multiband float32 (reflectance / dB), UTM CRS
+    ├── masks/chip_000123__<user>.tif     uint8: 0 = background, n = class id   [segmentation]
+    └── coco/<source>.json       COCO (polygons in pixels) pointing to images/<source>/  [segmentation]
 ```
 
-Funciona diretamente com TorchGeo, segmentation‑models‑pytorch, Raster Vision, Detectron2/
-MMDetection (COCO), Keras/TensorFlow e qualquer pipeline com rasterio/xarray. Exemplo mínimo:
+Works directly with TorchGeo, segmentation‑models‑pytorch, Raster Vision, Detectron2/
+MMDetection (COCO), Keras/TensorFlow and any rasterio/xarray pipeline. Minimal example:
 
 ```python
 import pandas as pd, rasterio
 df = pd.read_csv("labels.csv")
-treino = df[(df.split == "train") & (df.status == "done")]
-for _, r in treino.iterrows():
-    x = rasterio.open(r["image_s2-2024-seca"]).read()      # (bandas, H, W)
-    y = rasterio.open(r["mask_path"]).read(1)              # segmentação
-    # ou r["present"] / r["cls_<classe>"] para classificação
+train = df[(df.split == "train") & (df.status == "done")]
+for _, r in train.iterrows():
+    x = rasterio.open(r["image_s2-2024-seca"]).read()      # (bands, H, W)
+    y = rasterio.open(r["mask_path"]).read(1)              # segmentation
+    # or r["present"] / r["cls_<class>"] for classification
 ```
 
-Linha de comando: `chipcollector export <id_projeto> --out ./exports [--source s2-2024] [--status done uncertain] [--drive]`.
+Command line: `chipcollector export <project_id> --out ./exports [--source s2-2024] [--status done uncertain] [--drive]`.
 
-## Configuração (variáveis de ambiente)
+## Configuration (environment variables)
 
-Veja [`.env.example`](.env.example). Principais: `CHIPS_DATA_DIR` (dados, cache e SQLite),
-`CHIPS_DATABASE_URL` (PostgreSQL para equipes grandes: `pip install -e ".[postgres]"`),
+See [`.env.example`](.env.example). Main ones: `CHIPS_DATA_DIR` (data, cache and SQLite),
+`CHIPS_DATABASE_URL` (PostgreSQL for large teams: `pip install -e ".[postgres]"`),
 `CHIPS_ALLOW_SIGNUP`, `CHIPS_LOCK_MINUTES`, `CHIPS_PUBLIC_URL`, `CHIPS_GEE_*`, `CHIPS_DRIVE_*`.
 
-Para uso em servidor público, coloque atrás de um proxy HTTPS (Caddy/Nginx), defina
-`CHIPS_PUBLIC_URL=https://…`, `CHIPS_SECRET_KEY` e `CHIPS_ALLOW_SIGNUP=false`.
+For use on a public server, put it behind an HTTPS proxy (Caddy/Nginx) and set
+`CHIPS_PUBLIC_URL=https://…`, `CHIPS_SECRET_KEY` and `CHIPS_ALLOW_SIGNUP=false`.
 
-## Arquitetura
+## Architecture
 
 ```
 chipcollector/
-├── app.py          API REST (FastAPI) + serve a interface
-├── db.py           modelos: User, Project, ReferenceLayer, LocalRaster, Chip, ChipLock, Annotation, ExportJob
-├── auth.py         login/sessão, papéis
-├── layers.py       leitura e inspeção de camadas vetoriais/matriciais
-├── sampling.py     amostragem estratificada, chips de fundo, recorte da referência por chip
-├── geo.py          grade do chip em UTM, conversões pixel ↔ mapa
-├── imagery/        bases de imagem: stac.py (Planetary Computer/Earth Search), gee.py, local.py
-├── export.py       pacote de treinamento (GeoTIFF, máscaras, COCO, CSV, GeoJSON)
-├── drive.py        envio ao Google Drive
+├── app.py          REST API (FastAPI) + serves the interface
+├── db.py           models: User, Project, ReferenceLayer, LocalRaster, Chip, ChipLock, Annotation, ExportJob
+├── auth.py         login/session, roles
+├── layers.py       reading and inspecting vector/raster layers
+├── sampling.py     stratified sampling, background chips, clipping the reference per chip
+├── geo.py          chip grid in UTM, pixel ↔ map conversions
+├── imagery/        imagery sources: stac.py (Planetary Computer/Earth Search), gee.py, local.py
+├── export.py       training package (GeoTIFF, masks, COCO, CSV, GeoJSON)
+├── drive.py        upload to Google Drive
 ├── cli.py          serve | create-user | export | demo
-└── static/         interface (HTML/CSS/JS + Leaflet/Geoman empacotados)
+└── static/         interface (HTML/CSS/JS + bundled Leaflet/Geoman)
 ```
 
-API documentada automaticamente em `http://localhost:8000/docs`.
+The API is documented automatically at `http://localhost:8000/docs`.
 
-Bibliotecas: FastAPI, SQLModel/SQLAlchemy, rasterio/GDAL, GeoPandas, Shapely, pyproj,
+Libraries: FastAPI, SQLModel/SQLAlchemy, rasterio/GDAL, GeoPandas, Shapely, pyproj,
 pystac‑client, planetary‑computer, earthengine‑api, google‑api‑python‑client, Pillow, NumPy,
-Leaflet, Leaflet‑Geoman (free) e a fonte Manrope (OFL). Todas open source.
+Leaflet, Leaflet‑Geoman (free) and the Manrope font (OFL). All open source.
 
-## Testes
+## Tests
 
 ```bash
 pip install -e ".[dev]"
 pytest -q
 ```
 
-Os testes cobrem o fluxo completo (contas, projeto, upload de vetor/raster, geração de chips,
-fila multiusuário com reserva, anotação de segmentação e classificação, exportação e conteúdo das
-máscaras/COCO) usando dados sintéticos, sem depender de rede.
+The tests cover the full workflow (accounts, project, vector/raster upload, chip generation,
+multi-user queue with reservation, segmentation and classification annotation, export and the
+contents of the masks/COCO) using synthetic data, with no network dependency.
 
-## Licença
+## License
 
 MIT — © 2026 Jailson Soares de Souza Filho Alves.
