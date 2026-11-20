@@ -108,7 +108,8 @@ def _read_asset(href: str, grid: ChipGrid, resampling: Resampling) -> np.ndarray
             resampling=resampling, src_nodata=src.nodata, nodata=src.nodata if src.nodata is not None else 0,
         ) as vrt:
             arr = vrt.read(1, masked=True)
-    return arr.filled(np.nan).astype("float32") if np.ma.isMaskedArray(arr) else arr.astype("float32")
+    arr = arr.astype("float32")  # cast antes do fill: uint16/int não aceitam NaN
+    return arr.filled(np.nan) if np.ma.isMaskedArray(arr) else arr
 
 
 def _scale_offset(item, asset_key: str, sensor: str) -> tuple[float, float]:
