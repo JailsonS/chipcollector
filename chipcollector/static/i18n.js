@@ -18,6 +18,14 @@ const I18N = { en: {
   "Google Drive conectado.": "Google Drive connected.", "Idioma": "Language",
   "Salvar": "Save", "remover": "remove", "Nome": "Name", "E-mail": "Email", "Criar": "Create",
   "Carregando…": "Loading…",
+  // ---------------------------------------------------------------- navegação e visualização
+  "◀ Anterior": "◀ Previous", "Próximo ▶": "Next ▶", "Próximo pendente": "Next pending",
+  "Chip anterior (←)": "Previous chip (←)", "Próximo chip (→)": "Next chip (→)",
+  "Próximo chip pendente da fila (N)": "Next pending chip in the queue (N)",
+  "Visualização": "Display", "Composição RGB": "RGB composite", "Banda única com paleta": "Single band with palette",
+  "Banda": "Band", "Paleta pronta": "Preset palette", "Cores (hex, separadas por vírgula)": "Colours (hex, comma-separated)",
+  "Cor inválida na paleta: {c}": "Invalid colour in palette: {c}", "Informe pelo menos 2 cores.": "Enter at least 2 colours.",
+  "Cinza": "Grey", "Água": "Water", "Divergente": "Diverging",
 
   // ---------------------------------------------------------------- entrada
   "Amostras de referência para modelos de IA, coletadas em equipe.": "Reference samples for AI models, collected as a team.",
@@ -222,6 +230,7 @@ const I18N = { en: {
 
 // Mensagens do servidor com valores: [regex PT, modelo EN com $1, $2…]
 const SERVER_PATTERNS = { en: [
+  [/^Cor inválida na paleta: (.*)$/, "Invalid colour in palette: $1"],
   [/^Imagens (\d+)\/(\d+)$/, "Imagery $1/$2"],
   [/^Banda '(.*)' não encontrada no raster \((.*)\)\.$/, "Band '$1' not found in the raster ($2)."],
   [/^Campo '(.*)' não existe\. Campos: (.*)$/, "Field '$1' does not exist. Fields: $2"],

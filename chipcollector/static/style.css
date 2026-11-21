@@ -234,3 +234,14 @@ h2.danger { color: var(--danger); }
 .check ul { margin: .2rem 0 .6rem; padding-left: 1.2rem; font-size: .88rem; }
 .check-errors li { color: var(--danger); }
 .check-warnings li { color: var(--warn); }
+
+/* navegação entre chips */
+.chipnav { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .4rem; margin-top: .6rem; }
+.chipnav #chipPos { text-align: center; font-variant-numeric: tabular-nums; }
+.chipnav button { justify-content: center; padding: .45rem .7rem; }
+.chipnav button:disabled { opacity: .45; cursor: default; }
+.chipnav #queueBtn { grid-column: 1 / -1; }
+
+/* banda única com paleta */
+.palramp { height: 14px; border-radius: 7px; border: 1px solid var(--line); }
+input.invalid { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(180, 35, 24, .12); }
