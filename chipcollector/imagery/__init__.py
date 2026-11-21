@@ -176,33 +176,69 @@ def get_chip_image(source: dict[str, Any], grid: ChipGrid, cache_path: Path, *,
 
 # ---------------------------------------------------------------- renderização
 
-def render_png(img: ChipImage, rgb: list[str], stretch: list[float] | None = None) -> bytes:
-    idx = []
-    for b in rgb[:3]:
-        if b in img.band_names:
-            idx.append(img.band_names.index(b))
-        elif str(b).isdigit() and 0 < int(b) <= len(img.band_names):
-            idx.append(int(b) - 1)
+def parse_palette(text: str | list[str] | None) -> list[tuple[int, int, int]]:
+    """'#440154,21918c,fde725' -> [(68, 1, 84), ...]. Raises ValueError on an invalid code."""
+    if not text:
+        return []
+    items = text if isinstance(text, list) else str(text).replace(";", ",").split(",")
+    out = []
+    for raw in items:
+        h = str(raw).strip().lstrip("#")
+        if not h:
+            continue
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        if len(h) != 6 or any(c not in "0123456789abcdefABCDEF" for c in h):
+            raise ValueError(f"Cor inválida na paleta: {raw}")
+        out.append((int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)))
+    return out
+
+
+def _band_index(img: ChipImage, b: str) -> int | None:
+    if b in img.band_names:
+        return img.band_names.index(b)
+    if str(b).isdigit() and 0 < int(b) <= len(img.band_names):
+        return int(b) - 1
+    return None
+
+
+def _normalize(band: np.ndarray, stretch: list[float] | None) -> np.ndarray:
+    if stretch:
+        lo, hi = stretch
+    else:
+        vals = band[np.isfinite(band)]
+        lo, hi = (np.percentile(vals, [2, 98]) if vals.size else (0, 1))
+    if hi <= lo:
+        hi = lo + 1e-6
+    return np.clip((band - lo) / (hi - lo), 0, 1)
+
+
+def render_png(img: ChipImage, rgb: list[str], stretch: list[float] | None = None,
+               palette: list[tuple[int, int, int]] | None = None) -> bytes:
+    """RGB composite of up to 3 bands or, with `palette`, a single band (the first of `rgb`)
+    coloured by a linear ramp through the palette colours."""
+    idx = [i for i in (_band_index(img, b) for b in rgb[:3]) if i is not None]
     if not idx:
         idx = list(range(min(3, img.data.shape[0])))
-    while len(idx) < 3:
-        idx.append(idx[-1])
-    arr = img.data[idx].astype("float32")
-    valid = np.isfinite(arr).all(axis=0)
-    out = np.zeros(arr.shape, dtype="float32")
-    for i in range(3):
-        band = arr[i]
-        if stretch:
-            lo, hi = stretch
-        else:
-            vals = band[np.isfinite(band)]
-            lo, hi = (np.percentile(vals, [2, 98]) if vals.size else (0, 1))
-        if hi <= lo:
-            hi = lo + 1e-6
-        out[i] = np.clip((band - lo) / (hi - lo), 0, 1)
-    rgba = np.zeros((arr.shape[1], arr.shape[2], 4), dtype="uint8")
-    rgba[..., :3] = (np.nan_to_num(np.moveaxis(out, 0, -1)) * 255).astype("uint8")
-    rgba[..., 3] = np.where(valid, 255, 0)
+    if palette:
+        band = img.data[idx[0]].astype("float32")
+        valid = np.isfinite(band)
+        t = np.nan_to_num(_normalize(band, stretch))
+        cols = np.array(palette if len(palette) > 1 else palette * 2, dtype="float32")
+        pos = np.linspace(0, 1, len(cols))
+        rgb_arr = np.stack([np.interp(t, pos, cols[:, k]) for k in range(3)], axis=-1)
+        rgba = np.zeros((band.shape[0], band.shape[1], 4), dtype="uint8")
+        rgba[..., :3] = np.clip(np.round(rgb_arr), 0, 255).astype("uint8")
+        rgba[..., 3] = np.where(valid, 255, 0)
+    else:
+        while len(idx) < 3:
+            idx.append(idx[-1])
+        arr = img.data[idx].astype("float32")
+        valid = np.isfinite(arr).all(axis=0)
+        out = np.stack([_normalize(arr[i], stretch) for i in range(3)])
+        rgba = np.zeros((arr.shape[1], arr.shape[2], 4), dtype="uint8")
+        rgba[..., :3] = (np.nan_to_num(np.moveaxis(out, 0, -1)) * 255).astype("uint8")
+        rgba[..., 3] = np.where(valid, 255, 0)
     buf = io.BytesIO()
     Image.fromarray(rgba, "RGBA").save(buf, format="PNG", optimize=True)
     return buf.getvalue()

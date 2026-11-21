@@ -333,3 +333,45 @@ def test_old_database_gets_new_columns(tmp_path, monkeypatch):
     cols = {r[1] for r in sqlite3.connect(tmp_path / "d" / "chipcollector.db").execute("pragma table_info(referencelayer)")}
     assert {"role", "stratum_field"} <= cols and added == []
     db.reset_engine(); config.reset_settings()
+
+
+def test_single_band_palette_png(env):
+    app, files = env
+    admin, pid, _ = _setup_project(app, files)
+    cid = admin.get(f"/api/projects/{pid}/next").json()["chip_id"]
+    r = admin.get(f"/api/chips/{cid}/image.png",
+                  params={"source": "mosaico", "rgb": "N", "palette": "#440154,21918c,#fde725", "stretch": "0,0.5"})
+    assert r.status_code == 200 and r.content[:4] == b"\x89PNG"
+    from PIL import Image
+    px = np.asarray(Image.open(io.BytesIO(r.content)).convert("RGBA"))
+    opaque = px[px[..., 3] == 255][:, :3]
+    assert opaque.size
+    # every colour lies on the viridis-like ramp, so it's never grey (R=G=B) as an RGB composite of one band would be
+    assert not np.all((opaque[:, 0] == opaque[:, 1]) & (opaque[:, 1] == opaque[:, 2]))
+    bad = admin.get(f"/api/chips/{cid}/image.png", params={"source": "mosaico", "rgb": "N", "palette": "#zzzzzz,#fff"})
+    assert bad.status_code == 400
+
+
+def test_parse_palette():
+    from chipcollector.imagery import parse_palette
+    assert parse_palette("#000, ffffff") == [(0, 0, 0), (255, 255, 255)]
+    assert parse_palette("") == []
+    with pytest.raises(ValueError):
+        parse_palette("#12345")
+
+
+def test_chip_neighbors(env):
+    app, files = env
+    admin, pid, _ = _setup_project(app, files)
+    chips = admin.get(f"/api/projects/{pid}/chips").json()
+    ids = [c["id"] for c in chips]
+    mid = ids[len(ids) // 2]
+    r = admin.get(f"/api/projects/{pid}/chips/{mid}/neighbors").json()
+    assert r["prev"] == ids[ids.index(mid) - 1] and r["next"] == ids[ids.index(mid) + 1]
+    assert r["total"] == len(ids) and r["position"] == ids.index(mid) + 1
+    assert admin.get(f"/api/projects/{pid}/chips/{ids[0]}/neighbors").json()["prev"] is None
+    assert admin.get(f"/api/projects/{pid}/chips/{ids[-1]}/neighbors").json()["next"] is None
+    st = chips[0]["stratum"]
+    same = [c["id"] for c in chips if c["stratum"] == st]
+    r = admin.get(f"/api/projects/{pid}/chips/{same[0]}/neighbors", params={"stratum": st}).json()
+    assert r["total"] == len(same) and r["next"] == (same[1] if len(same) > 1 else None)

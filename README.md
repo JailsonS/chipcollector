@@ -22,7 +22,7 @@ deforestation, land use and land cover…) and both common approaches are suppor
 | **3. Reference data** | Upload **vector** layers (GPKG, GeoJSON, zipped Shapefile, KML, FlatGeobuf, GeoParquet) or categorical **raster** layers (GeoTIFF, e.g. MapBiomas, PRODES). Each layer has a role: **pre-stratified sample** made outside the system (points and/or polygons; the admin picks the stratum field and the reference class field, and each feature becomes a chip) or **reference to sample from** (the system stratifies by class and draws the chips). A check validates fields, geometries, samples without a stratum, duplicates and overlaps before generating. |
 | **4a. Chip size** | Set per project (pixels) + resolution (m/pixel). Grid aligned to the local UTM zone. |
 | **4b. Number of classes** | Single class (presence/absence) or multiple classes, with one or several classes per chip. |
-| **4c. Different imagery sources** | Each project has several “imagery sources” (sensor + period + clouds + composite). Sensors: **Sentinel‑2, Landsat 8/9, Landsat 5/7, Sentinel‑1** (Planetary Computer, free), Sentinel‑2 (Earth Search/AWS, free), **Google Earth Engine** (free for NGOs: S2, Landsat, S1, **Planet NICFI**, any collection) and **local rasters**. Switch source, RGB composite, stretch and compare with transparency while annotating. |
+| **4c. Different imagery sources** | Each project has several “imagery sources” (sensor + period + clouds + composite). Sensors: **Sentinel‑2, Landsat 8/9, Landsat 5/7, Sentinel‑1** (Planetary Computer, free), Sentinel‑2 (Earth Search/AWS, free), **Google Earth Engine** (free for NGOs: S2, Landsat, S1, **Planet NICFI**, any collection) and **local rasters**. Switch source, RGB composite or **single band with a colour palette** (presets or your own list of hex codes), stretch and compare with transparency while annotating. |
 | **4d. Annotation type** | **Segmentation:** draw, edit, cut and delete polygons; the *Use reference* button copies the polygons from the reference layer for **refinement**. **Classification:** binary presence/absence (or multiclass) label via keyboard shortcut. *Unsure* and *Skip* statuses. |
 | **5. Export** | .zip package with a multiband GeoTIFF per chip/source, GeoTIFF masks, **COCO JSON**, `labels.csv`, GeoJSON, train/val/test split and metadata with authorship. Local download and upload to **Google Drive** (per-user OAuth or service account). Also available from the command line. |
 
@@ -120,6 +120,8 @@ language, add a dictionary and a button in `LANGS`.
 | `Enter` | save and go to the next chip |
 | `U` / `S` | save as unsure / skip |
 | `B` | switch imagery source |
+| `←` / `→` | previous / next chip (by id, within the stratum filter) |
+| `N` | next pending chip in the queue |
 | `R` | show/hide reference |
 | `P` / `E` / `Del` / `Esc` | polygon / edit / delete / exit the tool |
 

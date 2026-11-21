@@ -24,7 +24,7 @@ from .config import get_settings
 from .db import (Annotation, Chip, ChipLock, ExportJob, LocalRaster, Project, ReferenceLayer, User,
                  get_engine, get_session, utcnow)
 from .geo import grid_from_chip
-from .imagery import ImageryError, catalog, normalize_source, render_png
+from .imagery import ImageryError, catalog, normalize_source, parse_palette, render_png
 from .layers import (LayerError, check_samples, count_values, inspect_layer, is_raster, norm_value, read_vector,
                      store_upload)
 from .sampling import SamplingParams, manual_chip, reference_to_pixels, sample_layer, samples_to_chips
@@ -638,6 +638,23 @@ def create_app() -> FastAPI:
         session.commit()
         return {"deleted": n}
 
+    @app.get("/api/projects/{pid}/chips/{cid}/neighbors")
+    def chip_neighbors(pid: int, cid: int, stratum: str = "", user: User = Depends(current_user),
+                       session: Session = Depends(get_session)):
+        """Previous/next chip by id (optionally within a stratum), for browsing back and forth."""
+        _project_or_404(session, pid)
+        base = select(Chip.id).where(Chip.project_id == pid)
+        if stratum:
+            base = base.where(Chip.stratum == stratum)
+        prev_id = session.exec(base.where(Chip.id < cid).order_by(Chip.id.desc()).limit(1)).first()
+        next_id = session.exec(base.where(Chip.id > cid).order_by(Chip.id).limit(1)).first()
+        q = select(func.count()).select_from(Chip).where(Chip.project_id == pid)
+        if stratum:
+            q = q.where(Chip.stratum == stratum)
+        total = session.exec(q).one()
+        position = session.exec(q.where(Chip.id <= cid)).one()
+        return {"prev": prev_id, "next": next_id, "position": position, "total": total}
+
     @app.get("/api/projects/{pid}/next")
     def next_chip(pid: int, stratum: str = "", exclude: int = 0, user: User = Depends(current_user),
                   session: Session = Depends(get_session)):
@@ -728,15 +745,19 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/api/chips/{cid}/image.png")
-    def chip_png(cid: int, source: str = "", rgb: str = "", stretch: str = "", refresh: bool = False,
-                 user: User = Depends(current_user), session: Session = Depends(get_session)):
+    def chip_png(cid: int, source: str = "", rgb: str = "", stretch: str = "", palette: str = "",
+                 refresh: bool = False, user: User = Depends(current_user), session: Session = Depends(get_session)):
         c = _chip_or_404(session, cid)
         p = _project_or_404(session, c.project_id)
         src = get_source(p, source or None)
+        try:
+            pal = parse_palette(palette)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
         img = chip_image(session, p, c, src, refresh=refresh)
         bands = [b for b in rgb.split(",") if b] or src["rgb"]
         st = [float(x) for x in stretch.split(",")] if stretch else src.get("stretch")
-        return Response(render_png(img, bands, st), media_type="image/png",
+        return Response(render_png(img, bands, st, pal or None), media_type="image/png",
                         headers={"Cache-Control": "private, max-age=3600"})
 
     @app.get("/api/chips/{cid}/image-info")

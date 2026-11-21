@@ -292,11 +292,29 @@ async function renderAnnotate(chipId) {
           <select id="stratumSel" style="width:auto" title="Filtrar por estrato">
             <option value="">todos os estratos</option>${strata.map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>
         <div id="chipInfo" class="small muted" style="margin-top:.3rem"></div>
+        <div class="chipnav">
+          <button id="prevBtn" title="Chip anterior (←)" disabled>◀ Anterior</button>
+          <span id="chipPos" class="small muted"></span>
+          <button id="nextBtn" title="Próximo chip (→)" disabled>Próximo ▶</button>
+          <button id="queueBtn" title="Próximo chip pendente da fila (N)">Próximo pendente <kbd>N</kbd></button>
+        </div>
       </div>
       <div class="card tight stack">
         <div class="field" style="margin:0"><label>Base de imagem <kbd>B</kbd></label><select id="srcSel">
           ${p.image_sources.map((s) => `<option value="${esc(s.id)}">${esc(s.label || s.id)}</option>`).join("")}</select></div>
+        <div class="field" style="margin:0"><label>Visualização</label><select id="modeSel">
+          <option value="rgb">Composição RGB</option><option value="single">Banda única com paleta</option></select></div>
         <div class="inline-fields" id="rgbBox"></div>
+        <div id="singleBox" class="stack hidden">
+          <div class="inline-fields">
+            <div><label>Banda</label><select id="bandSel"></select></div>
+            <div><label>Paleta pronta</label><select id="palPreset"><option value="">—</option>
+              ${Object.keys(PALETTES).map((k) => `<option value="${esc(k)}">${esc(k)}</option>`).join("")}</select></div>
+          </div>
+          <div class="field" style="margin:0"><label>Cores (hex, separadas por vírgula)</label>
+            <input id="palInput" placeholder="#440154, #21918c, #fde725" spellcheck="false" translate="no"></div>
+          <div id="palRamp" class="palramp"></div>
+        </div>
         <div class="inline-fields">
           <div><label>Mín.</label><input id="stMin" type="number" step="any" placeholder="auto"></div>
           <div><label>Máx.</label><input id="stMax" type="number" step="any" placeholder="auto"></div>
@@ -341,7 +359,31 @@ async function renderAnnotate(chipId) {
   document.addEventListener("keydown", keyh);
   cleanup = () => { document.removeEventListener("keydown", keyh); A.map.remove(); A.ctx.remove(); };
   loadHistory();
-  if (chipId) await openChip(chipId); else await openNext();
+  try {
+    if (chipId) await openChip(chipId); else await openNext();
+  } catch (e) { $("#chipmsg").classList.remove("hidden"); $("#chipmsg").textContent = `⚠ ${e.message}`; fail(e); }
+}
+
+/* navegação entre chips (anterior/próximo por id, respeitando o filtro de estrato) */
+async function loadNeighbors(id) {
+  const st = $("#stratumSel")?.value || "";
+  try {
+    const r = await api(`/api/projects/${S.project.id}/chips/${id}/neighbors?stratum=${encodeURIComponent(st)}`);
+    if (id !== A.chipId) return;
+    A.prevId = r.prev; A.nextId = r.next;
+    $("#prevBtn").disabled = !r.prev; $("#nextBtn").disabled = !r.next;
+    $("#chipPos").textContent = r.total ? `${r.position} / ${r.total}` : "";
+  } catch (_) {}
+}
+
+async function gotoChip(id) {
+  if (!id || id === A.chipId) return;
+  const ticket = (A.nextTicket = (A.nextTicket || 0) + 1);
+  const prev = A.chipId;
+  if (prev && !A.chip?.my_annotation) api(`/api/chips/${prev}/release`, { method: "POST" }).catch(() => {});
+  history.replaceState(null, "", `#/p/${S.project.id}/annotate/${id}`);
+  try { await openChip(id); }
+  catch (e) { if (ticket === A.nextTicket) { $("#chipmsg").classList.remove("hidden"); $("#chipmsg").textContent = `⚠ ${e.message}`; } fail(e); }
 }
 
 function setupGeoman() {
@@ -397,19 +439,29 @@ function setTool(t) {
 
 function bindAnnotateControls() {
   $$(".toolstrip button").forEach((b) => (b.onclick = () => {
-    const t = b.dataset.t;
-    if (t === "ref") { b.classList.toggle("active"); A.map.hasLayer(A.refLayer) ? A.map.removeLayer(A.refLayer) : A.refLayer.addTo(A.map); return; }
-    if (t === "others") { b.classList.toggle("active"); A.map.hasLayer(A.otherLayer) ? A.map.removeLayer(A.otherLayer) : A.otherLayer.addTo(A.map); return; }
-    if (t === "fit") { fitChip(); return; }
-    if (t === "useref") { useReference(); return; }
-    if (t === "clear") { if (confirm(t("Remover todos os polígonos deste chip?"))) drawnLayers().forEach((l) => A.map.removeLayer(l)); return; }
-    setTool(t);
+    const tool = b.dataset.t;
+    if (tool === "ref") { b.classList.toggle("active"); A.map.hasLayer(A.refLayer) ? A.map.removeLayer(A.refLayer) : A.refLayer.addTo(A.map); return; }
+    if (tool === "others") { b.classList.toggle("active"); A.map.hasLayer(A.otherLayer) ? A.map.removeLayer(A.otherLayer) : A.otherLayer.addTo(A.map); return; }
+    if (tool === "fit") { fitChip(); return; }
+    if (tool === "useref") { useReference(); return; }
+    if (tool === "clear") { if (confirm(t("Remover todos os polígonos deste chip?"))) drawnLayers().forEach((l) => A.map.removeLayer(l)); return; }
+    setTool(tool);
   }));
   $("#srcSel").onchange = () => { A.rgb = null; $("#stMin").value = $("#stMax").value = ""; loadImage(); };
+  $("#prevBtn").onclick = () => gotoChip(A.prevId);
+  $("#nextBtn").onclick = () => gotoChip(A.nextId);
+  $("#queueBtn").onclick = () => openNext();
+  $("#modeSel").onchange = () => { viewState().mode = $("#modeSel").value; saveView(); syncModeUI(); loadImage(false); };
+  $("#bandSel").onchange = () => { viewState().band = $("#bandSel").value; saveView(); loadImage(false); };
+  $("#palPreset").onchange = () => {
+    const k = $("#palPreset").value; if (!k) return;
+    $("#palInput").value = PALETTES[k].join(", "); applyPalette();
+  };
+  $("#palInput").onchange = () => { $("#palPreset").value = ""; applyPalette(); };
   $("#stMin").onchange = $("#stMax").onchange = () => loadImage(false);
   $("#cmpSel").onchange = () => { $("#cmpOp").classList.toggle("hidden", !$("#cmpSel").value); loadCompare(); };
   $("#cmpOp").oninput = () => { if (A.cmpLayer) A.cmpLayer.setOpacity(Number($("#cmpOp").value)); };
-  $("#stratumSel").onchange = () => openNext();
+  $("#stratumSel").onchange = () => { if (A.chipId) loadNeighbors(A.chipId); openNext(); };
   $("#saveBtn").onclick = () => save("done");
   $("#uncBtn").onclick = () => save("uncertain");
   $("#skipBtn").onclick = () => save("skip");
@@ -467,6 +519,9 @@ function onKey(e) {
   else if (k === "u") save("uncertain");
   else if (k === "r") $(".toolstrip [data-t=ref]").click();
   else if (k === "b") { const s = $("#srcSel"); s.selectedIndex = (s.selectedIndex + 1) % s.options.length; s.onchange(); }
+  else if (k === "arrowleft") { gotoChip(A.prevId); e.preventDefault(); }
+  else if (k === "arrowright") { gotoChip(A.nextId); e.preventDefault(); }
+  else if (k === "n") openNext();
   else if (p.annotation_type === "segmentation") {
     if (k === "p") setTool("poly");
     else if (k === "e") setTool("edit");
@@ -502,6 +557,8 @@ async function openChip(id) {
   A.chip = c; A.chipId = c.id;
   const S0 = c.size_px;
   A.bounds = L.latLngBounds([[-S0, 0], [0, S0]]);
+  fitChip();  // o mapa precisa de uma vista antes de receber camadas (senão o Leaflet falha com polígonos salvos)
+  loadNeighbors(c.id);
   $("#chipTitle").textContent = `Chip #${c.id}`;
   $("#chipInfo").innerHTML = `${t("estrato {s}", { s: `<b translate="no">${esc(c.stratum)}</b>` })} · ${c.lat.toFixed(5)}, ${c.lon.toFixed(5)} · EPSG:${c.epsg}<br>
     ${c.size_px}×${c.size_px} px · ${c.resolution_m} m · ${t("{a}/{b} anotações", { a: c.n_annotations, b: c.annotators_per_chip })}
@@ -532,7 +589,6 @@ async function openChip(id) {
   }
   if (c.my_annotation?.source_id && p.image_sources.some((s) => s.id === c.my_annotation.source_id)) $("#srcSel").value = c.my_annotation.source_id;
   renderClassButtons();
-  fitChip();
   // contexto
   if (A.ctxRect) A.ctx.removeLayer(A.ctxRect);
   A.ctxRect = L.geoJSON(c.footprint, { style: { color: "#e63946", weight: 2, fill: false } }).addTo(A.ctx);
@@ -553,10 +609,52 @@ function fitChip() { if (A.bounds) A.map.fitBounds(A.bounds, { padding: [10, 10]
 
 function imageUrl(srcId, withBands = true) {
   const q = new URLSearchParams({ source: srcId });
-  if (withBands && A.rgb && A.rgbSrc === srcId) q.set("rgb", A.rgb.join(","));
+  const v = viewState(srcId);
+  if (withBands && v.mode === "single" && A.rgbSrc === srcId && v.band && v.palette?.length) {
+    q.set("rgb", v.band); q.set("palette", v.palette.join(","));
+  } else if (withBands && A.rgb && A.rgbSrc === srcId) q.set("rgb", A.rgb.join(","));
   const mn = $("#stMin").value, mx = $("#stMax").value;
   if (withBands && mn !== "" && mx !== "") q.set("stretch", `${mn},${mx}`);
   return `/api/chips/${A.chipId}/image.png?${q}`;
+}
+
+/* visualização: composição RGB ou banda única com paleta; guardada por projeto e base no navegador */
+const PALETTES = {
+  "Cinza": ["#000000", "#ffffff"],
+  "Viridis": ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"],
+  "Magma": ["#000004", "#51127c", "#b73779", "#fc8961", "#fcfdbf"],
+  "NDVI": ["#a50026", "#f46d43", "#fee08b", "#d9ef8b", "#66bd63", "#006837"],
+  "Água": ["#f7fbff", "#6baed6", "#08306b"],
+  "Divergente": ["#2166ac", "#f7f7f7", "#b2182b"],
+};
+const VIEW_KEY = "chipcollector.view";
+let VIEW = (() => { try { return JSON.parse(localStorage.getItem(VIEW_KEY) || "{}") || {}; } catch (_) { return {}; } })();
+function viewState(srcId = $("#srcSel")?.value) {
+  const k = `${S.project.id}:${srcId}`;
+  return (VIEW[k] = VIEW[k] || { mode: "rgb" });
+}
+function saveView() { try { localStorage.setItem(VIEW_KEY, JSON.stringify(VIEW)); } catch (_) {} }
+function syncModeUI() {
+  const v = viewState(), single = v.mode === "single";
+  $("#modeSel").value = v.mode;
+  $("#rgbBox").classList.toggle("hidden", single);
+  $("#singleBox").classList.toggle("hidden", !single);
+  $("#palRamp").style.background = `linear-gradient(to right, ${(v.palette || []).join(", ")})`;
+}
+function parsePalette(text) {
+  const cols = text.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean).map((x) => (x.startsWith("#") ? x : `#${x}`));
+  const bad = cols.find((c) => !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c));
+  if (bad) throw new Error(t("Cor inválida na paleta: {c}", { c: bad }));
+  if (cols.length < 2) throw new Error(t("Informe pelo menos 2 cores."));
+  return cols;
+}
+function applyPalette() {
+  try {
+    const v = viewState();
+    v.palette = parsePalette($("#palInput").value);
+    $("#palInput").classList.remove("invalid");
+    saveView(); syncModeUI(); loadImage(false);
+  } catch (e) { $("#palInput").classList.add("invalid"); toast(e.message, true); }
 }
 
 function loadOverlay(url) {
@@ -581,6 +679,8 @@ async function loadImage(refreshBands = true) {
       const info = await api(`/api/chips/${chipId}/image-info?source=${encodeURIComponent(srcId)}`);
       if (chipId !== A.chipId) return;
       A.bands = info.bands; A.rgbSrc = srcId;
+      const saved = viewState(srcId).rgb;
+      if (!A.rgb && saved && saved.every((b) => info.bands.includes(b))) A.rgb = saved;
       A.rgb = A.rgb && A.rgb.every((b) => info.bands.includes(b)) ? A.rgb : info.source.rgb.filter((b) => info.bands.includes(b));
       if (!A.rgb.length) A.rgb = info.bands.slice(0, 3);
       const st = info.source.stretch;
@@ -591,7 +691,13 @@ async function loadImage(refreshBands = true) {
         `<a href="/api/chips/${chipId}/image.tif?source=${encodeURIComponent(srcId)}">GeoTIFF</a>`].filter(Boolean).join(" · ");
       $("#rgbBox").innerHTML = ["R", "G", "B"].map((ch, i) => `<div><label>${ch}</label><select data-i="${i}">
         ${A.bands.map((b) => `<option ${A.rgb[i] === b ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></div>`).join("");
-      $$("#rgbBox select").forEach((s) => (s.onchange = () => { A.rgb = $$("#rgbBox select").map((x) => x.value); loadImage(false); }));
+      $$("#rgbBox select").forEach((s) => (s.onchange = () => { A.rgb = $$("#rgbBox select").map((x) => x.value); viewState(srcId).rgb = A.rgb; saveView(); loadImage(false); }));
+      const v = viewState(srcId);
+      if (!v.band || !A.bands.includes(v.band)) v.band = A.bands[0];
+      if (!v.palette?.length) v.palette = PALETTES.Viridis.slice();
+      $("#bandSel").innerHTML = A.bands.map((b) => `<option ${v.band === b ? "selected" : ""}>${esc(b)}</option>`).join("");
+      $("#palInput").value = v.palette.join(", ");
+      syncModeUI();
     }
     const url = imageUrl(srcId);
     await loadOverlay(url);
