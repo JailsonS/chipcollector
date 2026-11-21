@@ -447,7 +447,7 @@ function bindAnnotateControls() {
     if (tool === "clear") { if (confirm(t("Remover todos os polígonos deste chip?"))) drawnLayers().forEach((l) => A.map.removeLayer(l)); return; }
     setTool(tool);
   }));
-  $("#srcSel").onchange = () => { A.rgb = null; $("#stMin").value = $("#stMax").value = ""; loadImage(); };
+  $("#srcSel").onchange = () => { A.rgb = null; loadImage(); };
   $("#prevBtn").onclick = () => gotoChip(A.prevId);
   $("#nextBtn").onclick = () => gotoChip(A.nextId);
   $("#queueBtn").onclick = () => openNext();
@@ -458,7 +458,11 @@ function bindAnnotateControls() {
     $("#palInput").value = PALETTES[k].join(", "); applyPalette();
   };
   $("#palInput").onchange = () => { $("#palPreset").value = ""; applyPalette(); };
-  $("#stMin").onchange = $("#stMax").onchange = () => loadImage(false);
+  $("#stMin").onchange = $("#stMax").onchange = () => {
+    const mn = $("#stMin").value, mx = $("#stMax").value;
+    viewState().stretch = mn !== "" && mx !== "" ? [Number(mn), Number(mx)] : null;
+    saveView(); loadImage(false);
+  };
   $("#cmpSel").onchange = () => { $("#cmpOp").classList.toggle("hidden", !$("#cmpSel").value); loadCompare(); };
   $("#cmpOp").oninput = () => { if (A.cmpLayer) A.cmpLayer.setOpacity(Number($("#cmpOp").value)); };
   $("#stratumSel").onchange = () => { if (A.chipId) loadNeighbors(A.chipId); openNext(); };
@@ -607,14 +611,16 @@ function sampleInfo(smp) {
 
 function fitChip() { if (A.bounds) A.map.fitBounds(A.bounds, { padding: [10, 10] }); }
 
-function imageUrl(srcId, withBands = true) {
+function imageUrl(srcId) {
   const q = new URLSearchParams({ source: srcId });
   const v = viewState(srcId);
-  if (withBands && v.mode === "single" && A.rgbSrc === srcId && v.band && v.palette?.length) {
+  if (v.mode === "single" && v.band && v.palette?.length) {
     q.set("rgb", v.band); q.set("palette", v.palette.join(","));
-  } else if (withBands && A.rgb && A.rgbSrc === srcId) q.set("rgb", A.rgb.join(","));
-  const mn = $("#stMin").value, mx = $("#stMax").value;
-  if (withBands && mn !== "" && mx !== "") q.set("stretch", `${mn},${mx}`);
+  } else {
+    const rgb = srcId === A.rgbSrc && A.rgb?.length ? A.rgb : v.rgb;
+    if (rgb?.length) q.set("rgb", rgb.join(","));
+  }
+  if (v.stretch?.length === 2) q.set("stretch", v.stretch.join(","));
   return `/api/chips/${A.chipId}/image.png?${q}`;
 }
 
@@ -684,7 +690,9 @@ async function loadImage(refreshBands = true) {
       A.rgb = A.rgb && A.rgb.every((b) => info.bands.includes(b)) ? A.rgb : info.source.rgb.filter((b) => info.bands.includes(b));
       if (!A.rgb.length) A.rgb = info.bands.slice(0, 3);
       const st = info.source.stretch;
-      if (st && $("#stMin").value === "" && $("#stMax").value === "") { $("#stMin").placeholder = st[0]; $("#stMax").placeholder = st[1]; }
+      const vs = viewState(srcId).stretch;
+      $("#stMin").value = vs ? vs[0] : ""; $("#stMax").value = vs ? vs[1] : "";
+      $("#stMin").placeholder = st ? st[0] : "auto"; $("#stMax").placeholder = st ? st[1] : "auto";
       const m = info.meta || {};
       $("#imgMeta").innerHTML = [m.dates?.length ? t("cenas: {d}", { d: m.dates.slice(0, 6).join(", ") + (m.dates.length > 6 ? "…" : "") }) : "",
         m.valid_fraction !== undefined ? t("pixels válidos: {p}%", { p: (100 * m.valid_fraction).toFixed(0) }) : "",
@@ -701,6 +709,7 @@ async function loadImage(refreshBands = true) {
     }
     const url = imageUrl(srcId);
     await loadOverlay(url);
+    if ($("#cmpSel").value === srcId && !refreshBands) loadCompare();
     if (chipId !== A.chipId) return;
     if (A.imgLayer) A.map.removeLayer(A.imgLayer);
     A.imgLayer = L.imageOverlay(url, A.bounds, { pmIgnore: true, className: "pix", interactive: false }).addTo(A.map);
@@ -716,7 +725,7 @@ async function loadCompare() {
   const sid = $("#cmpSel").value;
   if (!sid) return;
   try {
-    const url = imageUrl(sid, false);
+    const url = imageUrl(sid);
     await loadOverlay(url);
     A.cmpLayer = L.imageOverlay(url, A.bounds, { pmIgnore: true, opacity: Number($("#cmpOp").value), interactive: false }).addTo(A.map);
     if (A.imgLayer) A.cmpLayer.bringToFront();
